@@ -262,7 +262,8 @@ Everything runs on Google Cloud and uses Gemini.
 
 ```mermaid
 flowchart LR
-  U["Shopper's phone"] --> W["Our web app<br/>Firebase Hosting"]
+  U["Shopper's phone"] --> W["Our web app<br/>Firebase App Hosting"]
+  W --> AU["Google sign-in<br/>Firebase Authentication"]
   X["Other AI apps<br/>Gemini, ChatGPT, Claude"] -->|"MCP / A2A"| A
   W --> A["Our agent<br/>Cloud Run + ADK"]
   A --> G["Gemini 3.8 Flash<br/>understand, check, explain"]
@@ -271,6 +272,7 @@ flowchart LR
   A --> S[("Cloud Storage<br/>product photos")]
   A --> N["Gemini image model<br/>pictures for 'I saw it'"]
   A --> M["Model Armor<br/>blocks tricks in reviews"]
+  A --> B[("BigQuery<br/>search logs for seller insights")]
 ```
 
 | Tool | What it does for us, in simple words |
@@ -280,8 +282,10 @@ flowchart LR
 | **Firestore** (with vector search) | Our database for products, users and saved searches. It can also search by meaning using the embeddings |
 | **ADK** (Google's Agent Development Kit) | The framework we build the agent's steps with |
 | **Cloud Run** | Runs our agent on the internet. The competition requires Cloud Run or Firebase |
-| **Firebase Hosting** | Hosts our web app |
+| **Firebase App Hosting** | Hosts our web app (Next.js) |
+| **Firebase Authentication** | Google sign-in for shoppers, so their rules, sizes and style are saved |
 | **Cloud Storage** | Stores the product photos |
+| **BigQuery** | Stores search logs (no personal details) for the seller insights page |
 | **Gemini image model** (Nano Banana) | Draws the quick pictures in "I saw it" mode |
 | **Gemini Live** (later) | Real-time voice conversation |
 | **Model Armor** | Stops people from hiding instructions in reviews or product text to trick the AI |
@@ -336,7 +340,7 @@ flowchart LR
 
 ### Delivery dates
 
-We work out delivery dates from the warehouse city and the shopper's pincode. Same city takes 1–2 days, between big cities 2–3, smaller towns 3–5, remote areas longer, and there's no delivery on Sundays. In a real product, this comes from courier partners.
+We work out delivery dates from the warehouse city and the shopper's pincode, using India Post's public pincode list to find the shopper's city and state. Same city takes 1–2 days, between big cities 2–3, other towns 3–5, and remote areas 6–8, and there's no delivery on Sundays. In a real product, this comes from courier partners.
 
 **We never copy data from Amazon, Flipkart or Myntra, and we never use shoppers' logins.** Their terms forbid it, and it would make us responsible for people's passwords under India's data protection law.
 
@@ -345,6 +349,8 @@ We work out delivery dates from the warehouse city and the shopper's pincode. Sa
 ## 9. The app screens
 
 The app is simple, friendly and mobile-first, with big readable text. It should also be easy to translate into Hindi later.
+
+Shoppers sign in once with Google, so their rules, sizes and style are saved. Shared shortlist links open without signing in.
 
 1. **Home.** One big box ("What are you looking for?") with a mic button and a camera button. Below it, three example chips to tap:
  - "Cotton kurta with pockets under ₹1,200"
@@ -400,17 +406,20 @@ The team writes the 50 test requests together, across categories and in English 
  - Agent Platform (for Gemini; this was called Vertex AI);
  - Cloud Run, Cloud Build and Artifact Registry;
  - Firestore and Cloud Storage;
- - Secret Manager and Model Armor.
+ - Secret Manager and Model Armor;
+ - BigQuery, for the seller insights page.
 4. Create a Firestore database in the Mumbai region (`asia-south1`).
 5. Create a Cloud Storage bucket for product photos, for example `ecommai-catalog`.
 6. Use Gemini through Google Cloud's Agent Platform, not a separate AI Studio key, so the free credits pay for it.
-7. Add teammates to the project.
+7. Add Firebase to the same project: turn on Firebase Authentication with Google sign-in, and Firebase App Hosting for the web app.
+8. Add teammates to the project.
 
 ### Each developer's laptop
 
 - **Google Cloud CLI** (`gcloud`): for logging in and deploying. Run `gcloud auth login` and `gcloud auth application-default login`.
 - **Python 3.12:** ADK needs Python 3.10 or newer, so the Mac's built-in Python 3.9 is too old. Install it with `uv` or Homebrew.
 - **Node.js 20 or newer:** for the web app.
+- **Kaggle API token:** for downloading the full-size product photos.
 
 ### Repo rules
 
@@ -503,7 +512,7 @@ About 10 slides, exported as a PDF:
 
 ## 17. What we submit
 
-- [ ] A working link on Cloud Run or Firebase that judges can open, either without logging in or with a test login, and with example searches ready to go
+- [ ] A working link on Cloud Run or Firebase that judges can open, where judges sign in with their own Google account in one tap, and with example searches ready to go
 - [ ] A demo video under 3 minutes, with English subtitles for the Hinglish parts
 - [ ] The public GitHub repo with a clear README: what it is, how it works, how to run it, the dataset credit, and a note that prices, delivery and reviews are demo data
 - [ ] The pitch deck as a PDF
@@ -622,7 +631,9 @@ class Verification(BaseModel):
 | MCP server and A2A wrapper | The same workflow for other AI apps |
 
 **Notes:**
-- Use `adk web` for local testing and `adk eval` for the test set.
+- **Each step is a plain Python function**, so there's only one copy of the logic:
+ - FastAPI calls these functions directly for the app, which keeps searches fast, predictable and easy to stream;
+ - `agent/agent.py` wraps the same functions as ADK tools under one `root_agent`, for `adk web`, `adk eval`, MCP and A2A.
 - Run behind FastAPI on Cloud Run.
 - Store sessions in Firestore.
 - Stream progress events to the app with server-sent events (SSE).
@@ -633,7 +644,7 @@ class Verification(BaseModel):
 |---|---|---|
 | `POST /api/brief` | `{ text?, audio_base64?, image_url?, pincode, language }` | `{ session_id, brief, question? }` |
 | `POST /api/brief/update` | `{ session_id, change }` | `{ brief }` |
-| `POST /api/search` | `{ session_id }` | Stream: `candidates {count}` → `checking {product_id}` → `verified {product_id, status, ticks[]}` → `done {summary, tradeoffs?}` |
+| `POST /api/search` | `{ session_id }` | Stream: `candidates {count}` → `checking {product_id}` → `verified {product_id, status, ticks[]}` → `done {summary, tradeoffs?}`. If something goes wrong: `error {message, retryable}` |
 | `GET /api/products/{id}` | — | Product with all evidence |
 | `POST /api/seen/start` | `{ text \| audio }` | `{ session_id, questions[] }` |
 | `POST /api/seen/variants` | `{ session_id, answers, feedback? }` | `{ images[4], varied_attributes[] }` |
@@ -641,10 +652,16 @@ class Verification(BaseModel):
 | `GET /api/rules`, `PUT /api/rules` | `{ rules[] }` | `{ rules }` |
 | `POST /api/watch` | `{ session_id, notify }` | `{ watch_id }` |
 | `POST /api/share` | `{ session_id, product_ids[] }` | `{ share_url }` |
+| `GET /api/share/{id}` | — | The shared shortlist with tick-lists (no sign-in needed) |
 | `POST /api/feedback` | `{ session_id, product_id, action }` | `{ ok }` |
 | `POST /api/checkout` | `{ product_id, size }` | `{ redirect_url }` |
 | `/mcp` | MCP over Streamable HTTP | Tools for other AI apps |
 | `/.well-known/agent-card.json`, `/a2a` | A2A | Our agent for Gemini Enterprise and others |
+
+**Sign-in:**
+- **App endpoints** (`/api/*`) need the shopper's Firebase sign-in token in the `Authorization: Bearer <token>` header; the agent checks it on every request. The one exception is `GET /api/share/{id}`.
+- **`/mcp` and `/a2a`** use their own OAuth sign-in.
+- **The browser calls the Cloud Run agent directly,** not through Firebase, so streaming isn't held up. The agent only accepts requests from our app's web address (CORS).
 
 **Example `done` event:**
 
@@ -673,65 +690,109 @@ When nothing passes, `tradeoffs` looks like:
 ```text
 products/{productId}
   title, brand, gender, masterCategory, subCategory, articleType, baseColour, usage
+  group                                // detail group from section H, e.g. "tops", "watches"
   description                          // written by Gemini, factual
-  attributes { <name>: { value, confidence, note } }   // see section H
-  price { mrp, selling }
+  attributes { <name>: { value, confidence, note, source } }   // source: "gemini" or "catalogue"
+  catalogue_details { ... }            // real details from the dataset's styles/{id}.json, if any
+  needs_review [ <attribute name> ]    // where Gemini and the real details disagree
+  price { mrp, selling, demo }         // demo: false when the price is real
   sizes { S: 4, M: 0, L: 7 }           // stock per size
   warehouse { city, pincode }
   delivery_fee
   cod { available, fee }
   returns { returnable, window_days, exchange }
-  reviews [ { rating, text, demo: true } ]
+  reviews [ { rating, text, demo: true, flagged } ]   // flagged: Model Armor marked it suspicious
   rating_avg, rating_count
-  images [ url ]
-  embedding                            // Gemini Embedding 2, 768 numbers
+  images { original, gemini, thumb }   // links to the three photo sizes
+  embedding                            // Gemini Embedding 2, 768 numbers, photo + text
   demo_data: true
 
-users/{userId}
-  pincode, language, rules [ ... ], sizes { <brand>: <size> }
-  taste { <articleType>: vector }
+users/{userId}                         // userId = the shopper's Firebase sign-in ID
+  name, email                          // from Google sign-in; never copied into logs
+  pincode, language, rules [ MustHave ], sizes { <brand>: <size> }
+  taste { <articleType>: vector }      // average embedding of liked, saved and bought products
   likes [ ... ], dislikes [ ... ], watches [ ... ]
 
 sessions/{sessionId}
   userId, brief, history, results, feedback
+
+checks/{productId}__{attribute}__{rule}__{value}   // saved careful-check results
+  status, confidence, evidence, model, created_at
+
+shares/{shareId}
+  product_ids, brief, created_at       // opens without sign-in
 ```
+
+**BigQuery table `ecommai.searches`** (one row per search, for the seller insights page): brief, category, candidate count, passed count, rejection counts by reason, trade-offs offered, pincode, language. No name, email or user ID.
 
 ### G. Repo layout
 
 ```text
 ecommai/
   README.md
-  PLAN.md
-  .env.example
+  PLAN.md                 # what we're building and why
+  IMPLEMENTATION.md       # how to build it, step by step
+  .env.example            # setting names only, no real values
+  scripts/
+    check_models.py       # one test call to each Gemini model
+    smoke_test.sh         # quick check of the deployed agent
   data_prep/
     select_catalog.py     # pick a balanced set of products
-    upload_images.py      # photos -> Cloud Storage
+    get_photos.py         # full-size photos -> Cloud Storage, in three sizes
+    read_details.py       # real details from the dataset's styles/{id}.json
     enrich.py             # Gemini notes the details from each photo
-    simulate.py           # demo price, sizes, stock, delivery, COD, returns, reviews
-    embed.py              # Gemini Embedding 2 -> Firestore
-    schemas.py            # the detail vocabulary (section H)
+    simulate.py           # demo price, sizes, stock, delivery, COD, returns
+    reviews.py            # demo reviews, planted problems, Model Armor screening
+    embed.py              # Gemini Embedding 2 for each product (photo + text)
+    load_firestore.py     # write everything to Firestore
+    schemas.py            # detail vocabulary and product-type groups (section H)
+    pincodes.csv          # pincode -> city, state, delivery zone (from India Post's list)
   agent/
     app.py                # FastAPI endpoints
-    workflow.py           # the six steps
+    auth.py               # checks the Google sign-in token
+    workflow.py           # the six steps, in order
     brief.py  rules.py  retrieve.py  verify.py  rank.py  tradeoffs.py
-    seen_it.py  delivery.py  watch.py  share.py
+    delivery.py  learn.py  seen_it.py  watch.py  share.py  insights.py
+    agent.py              # the same steps as ADK tools (root_agent), for adk web, adk eval, MCP and A2A
     mcp_server.py         # tools for other AI apps
     a2a_card.json         # agent card for A2A
     models.py             # Pydantic models
     prompts/
     Dockerfile
-  web/                    # the app screens
+  web/                    # the app screens (Next.js)
+  tests/
+    test_*.py             # pytest tests
+    briefs.jsonl          # requests with the checklist we expect
+    checks.jsonl          # product + must-have pairs with the right answer, marked by people
+    injections.jsonl      # trick texts that try to fool the agent
   eval/
     requests.jsonl        # 50 test requests
-    labels.jsonl          # which products truly have everything
+    labels.jsonl          # which products truly have everything, marked by people
+    planted_problems.jsonl  # problems we put into the demo data on purpose
     run_eval.py           # Gemini search alone vs with our checking
+    results.md            # the measured numbers we use in the video and deck
   notebooks/
     Ecomm.ipynb           # Sarika's first notebook
 ```
 
+Files created while preparing data (`data/`, downloads, caches) stay out of the repo through `.gitignore`.
+
 ### H. Detail vocabulary (first version)
 
-**Kurtas, shirts, T-shirts, tops**
+Every product belongs to one **group**, and each group has its own list of details. The group comes from the product type (`articleType`) in the dataset. Product types not listed here are left out of our catalogue.
+
+| Group | Product types in the dataset |
+|---|---|
+| `tops` | Kurtas, Kurtis, Tunics, Shirts, Tshirts, Tops |
+| `bottoms` | Jeans, Trousers |
+| `shoes` | Casual Shoes, Sports Shoes, Formal Shoes |
+| `watches` | Watches |
+| `bags` | Handbags, Backpacks, Clutches |
+| `sunglasses` | Sunglasses |
+
+Any detail can also be `unknown` when the photo and the real details don't show it.
+
+**`tops`: kurtas, shirts, T-shirts, tops**
 - **sleeve_length:** sleeveless, short, elbow, three-quarter, full
 - **neckline:** round, v-neck, collar, mandarin, boat, square, keyhole, henley, polo
 - **pockets:** none, side, patch, chest, hidden, unknown
@@ -744,15 +805,50 @@ ecommai/
 - **closure:** none, buttons, zip, tie
 - **usage:** casual, office, ethnic, party, sports
 
-**Jeans and trousers:** fit, rise, wash, distressed, stretch, length.
+**`bottoms`: jeans and trousers**
+- **fit:** skinny, slim, straight, regular, relaxed, bootcut, wide-leg, tapered
+- **rise:** low, mid, high
+- **wash:** light, medium, dark, black, grey, none
+- **distressed:** none, light, heavy
+- **stretch:** yes, no
+- **length:** full, ankle, cropped
+- **fabric:** denim, cotton, linen, polyester, blend
+- **usage:** casual, office, party
 
-**Shoes:** type, closure, sole, sole colour, upper material, logo visible, heel height.
+**`shoes`: casual, sports and formal shoes**
+- **type:** sneakers, running, training, loafers, slip-on, boots, derby, oxford
+- **closure:** laces, velcro, slip-on, buckle, zip
+- **sole_type:** flat, cushioned, chunky, platform
+- **sole_colour:** white, off-white, black, brown, gum, grey, other
+- **upper_material:** canvas, leather, synthetic leather, mesh, knit, suede
+- **logo_visible:** none, subtle, prominent
+- **heel_height:** flat, low, medium, high
+- **usage:** casual, sports, office, party
 
-**Watches:** display, dial colour, dial markings, case shape, case material, case size, strap material, strap colour, chronograph.
+**`watches`**
+- **display:** analog, digital, analog-digital, smart
+- **dial_colour:** black, white, silver, blue, green, grey, brown, gold, rose gold, other
+- **dial_markings:** numbers, lines, roman numerals, mixed, none
+- **case_shape:** round, square, rectangular, tonneau
+- **case_material:** steel, gold-tone, rose-gold-tone, black metal, plastic
+- **case_size:** small (under 36 mm), medium (36–42 mm), large (over 42 mm)
+- **strap_material:** steel, leather, silicone, fabric, mesh, ceramic
+- **strap_colour:** black, brown, silver, gold, rose gold, blue, other
+- **chronograph:** yes, no
 
-**Bags:** type, size, closure, material, compartments, strap.
+**`bags`: handbags, backpacks, clutches**
+- **type:** tote, shoulder, sling, satchel, clutch, backpack
+- **size:** small, medium, large
+- **closure:** zip, magnetic, flap, button, drawstring, open
+- **material:** synthetic leather, leather, canvas, fabric, jute
+- **compartments:** one, two, three or more
+- **strap:** handles only, shoulder strap, cross-body strap, handles and strap, none
 
-**Sunglasses:** frame shape, frame material, lens colour, polarised.
+**`sunglasses`**
+- **frame_shape:** aviator, wayfarer, round, square, rectangle, cat-eye, oversized, sport
+- **frame_material:** metal, plastic, mixed
+- **lens_colour:** black, grey, brown, green, blue, mirrored, gradient
+- **polarised:** yes, no
 
 ### I. Prompt summaries
 
