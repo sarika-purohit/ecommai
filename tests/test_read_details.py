@@ -118,12 +118,29 @@ SYNONYMS = [
     ("bags", "Material", "Synthetic Leather", "material", "synthetic leather"),
     ("bags", "Compartment Closure", "Zip", "closure", "zip"),
     ("bags", "Number of Main Compartments", "3 and more", "compartments", "three or more"),
-    ("bags", "Size", "Regular", "size", "medium"),
+    ("bags", "Size", "Large", "size", "large"),
+    ("bags", "Size", "Small", "size", "small"),
     ("sunglasses", "Type", "Aviator Sunglasses", "frame_shape", "aviator"),
     ("sunglasses", "Type", "Rectangle Sunglasses", "frame_shape", "rectangle"),
     ("sunglasses", "Frame Material", "Metal", "frame_material", "metal"),
     ("sunglasses", "Lens Colour", "Grey", "lens_colour", "grey"),
     ("sunglasses", "Feature", "Polarised Lens", "polarised", "yes"),
+    ("sunglasses", "Feature", "Polarised and UV Protected Lens", "polarised", "yes"),
+    ("sunglasses", "Feature", "Regular Lens", "polarised", "no"),
+    ("sunglasses", "Features", "Regular Lenses", "polarised", "no"),
+    ("watches", "Features", "Multi Function", "chronograph", "no"),
+    ("watches", "Features 2", "Multi-Function", "chronograph", "no"),
+    ("watches", "Features", "Multifunction", "chronograph", "no"),
+    ("watches", "Strap Colour", "White", "strap_colour", "white"),
+    ("watches", "Strap Color", "white", "strap_colour", "white"),
+    ("shoes", "Material", "Synthetic Suede", "upper_material", "suede"),
+    ("shoes", "Upper Material", "Synthetic Suede", "upper_material", "suede"),
+    ("shoes", "Type", "Flats", "type", "flats"),
+    ("shoes", "Type", "Ballerinas", "type", "flats"),
+    ("shoes", "Type", "Ballerina Flats", "type", "flats"),
+    ("shoes", "Type", "Mary Jane", "type", "mary janes"),
+    ("shoes", "Type", "Mary Janes", "type", "mary janes"),
+    ("tops", "Neck", "Cowl Neck", "neckline", "cowl"),
 ]
 
 
@@ -141,8 +158,11 @@ def test_synonym(group, key, raw, attribute, expected):
 @pytest.mark.parametrize(
     ("group", "key", "raw"),
     [
-        ("tops", "Neck", "Cowl Neck"),
+        ("tops", "Neck", "High Neck"),
         ("tops", "Length", "Regular"),
+        ("bags", "Size", "Regular"),
+        ("shoes", "Type", "Flat Boots"),
+        ("sunglasses", "Feature", "UV Protected Lens"),
         ("tops", "Weave Pattern", "Jacquard"),
         ("watches", "Strap Material", "Synthetic"),
         ("shoes", "Material", "Synthetic"),
@@ -168,6 +188,43 @@ def test_more_specific_key_wins_for_the_same_detail():
 
     attributes, _ = map_attributes("tops", {"Collar": "Spread Collar", "Neck": "Round Neck"})
     assert attributes == {"neckline": "round"}
+
+
+def test_chronograph_on_any_features_key_beats_multi_function():
+    attributes, unmapped = map_attributes("watches", {"Features": "Multi Function", "Features 2": "Chronograph"})
+    assert attributes == {"chronograph": "yes"}
+    assert unmapped == {}
+
+
+@pytest.mark.parametrize(
+    ("article_type", "fabric", "expected"),
+    [
+        ("Jeans", "Cotton", "denim"),
+        ("Jeans", "Pure Cotton", "denim"),
+        ("Jeans", "100% Cotton", "denim"),
+        ("Jeans", "Denim", "denim"),
+        ("Jeans", "Polyester", "polyester"),
+        ("Jeans", "Cotton Blend", "blend"),
+        ("Trousers", "Cotton", "cotton"),
+        ("Trousers", "Pure Cotton", "cotton"),
+    ],
+)
+def test_cotton_jeans_are_denim(article_type, fabric, expected):
+    row = parse_style("1", {"data": {"articleAttributes": {"Fabric": fabric}}}, article_type).row
+    assert row["attributes"]["fabric"] == expected
+    assert row["raw_attributes"] == {"Fabric": fabric}
+
+
+def test_cotton_jeans_rule_uses_the_article_type_in_the_json():
+    style = {"data": {"articleType": {"typeName": "Jeans"}, "articleAttributes": {"Fabric": "Cotton"}}}
+    assert parse_style("1", style).row["attributes"] == {"fabric": "denim"}
+
+
+def test_article_type_values_are_in_our_vocabulary():
+    for article_type, attributes in read_details.ARTICLE_TYPE_VALUES.items():
+        group = read_details.group_for(article_type)
+        for attribute, swaps in attributes.items():
+            assert all(is_allowed(group, attribute, ours) for ours in swaps.values())
 
 
 def test_explicit_stretch_label_beats_stretch_fibre():
@@ -275,7 +332,7 @@ def test_jeans_fixture():
         "distressed": "light",
         "stretch": "no",
         "length": "full",
-        "fabric": "cotton",
+        "fabric": "denim",
         "usage": "casual",
     }
 

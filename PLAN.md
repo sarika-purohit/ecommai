@@ -706,14 +706,16 @@ When nothing passes, `tradeoffs` looks like:
 
 ```text
 products/{productId}
+  id                                   // same as the document id
   title, brand, gender, masterCategory, subCategory, articleType, baseColour, usage
   group                                // detail group from section H, e.g. "tops", "watches"
   description                          // written by Gemini, factual
-  attributes { <name>: { value, confidence, note, source } }   // source: "gemini" or "catalogue"
-  catalogue_details { ... }            // real details from the dataset's styles/{id}.json, if any
+  attributes { <name>: { value, confidence, note, source, gemini_value } }   // source: "gemini" or "catalogue"; gemini_value: what Gemini saw when the catalogue value won
+  catalogue_details { ... }            // real labels from the dataset's styles/{id}.json, plus its original description
   needs_review [ <attribute name> ]    // where Gemini and the real details disagree
   price { mrp, selling, demo }         // demo: false when the price is real
   sizes { S: 4, M: 0, L: 7 }           // stock per size
+  in_stock_sizes [ "S", "L" ]          // sizes with stock, for the "size in stock" search filter
   warehouse { city, pincode }
   delivery_fee
   cod { available, fee }
@@ -811,7 +813,7 @@ Any detail can also be `unknown` when the photo and the real details don't show 
 
 **`tops`: kurtas, shirts, T-shirts, tops**
 - **sleeve_length:** sleeveless, short, elbow, three-quarter, full
-- **neckline:** round, v-neck, collar, mandarin, boat, square, keyhole, henley, polo
+- **neckline:** round, v-neck, collar, mandarin, boat, square, keyhole, henley, polo, cowl
 - **pockets:** none, side, patch, chest, hidden, unknown
 - **pattern:** solid, stripes, checks, floral, geometric, printed, embroidered, abstract
 - **print_intensity:** none, subtle, medium, loud
@@ -829,11 +831,12 @@ Any detail can also be `unknown` when the photo and the real details don't show 
 - **distressed:** none, light, heavy
 - **stretch:** yes, no
 - **length:** full, ankle, cropped
+- **pockets:** none, front, back, front and back, cargo
 - **fabric:** denim, cotton, linen, polyester, blend
 - **usage:** casual, office, party
 
 **`shoes`: casual, sports and formal shoes**
-- **type:** sneakers, running, training, loafers, slip-on, boots, derby, oxford
+- **type:** sneakers, running, training, loafers, slip-on, boots, derby, oxford, flats, mary janes
 - **closure:** laces, velcro, slip-on, buckle, zip
 - **sole_type:** flat, cushioned, chunky, platform
 - **sole_colour:** white, off-white, black, brown, gum, grey, other
@@ -850,7 +853,7 @@ Any detail can also be `unknown` when the photo and the real details don't show 
 - **case_material:** steel, gold-tone, rose-gold-tone, black metal, plastic
 - **case_size:** small (under 36 mm), medium (36–42 mm), large (over 42 mm)
 - **strap_material:** steel, leather, silicone, fabric, mesh, ceramic
-- **strap_colour:** black, brown, silver, gold, rose gold, blue, other
+- **strap_colour:** black, brown, silver, gold, rose gold, blue, white, other
 - **chronograph:** yes, no
 
 **`bags`: handbags, backpacks, clutches**
@@ -866,6 +869,14 @@ Any detail can also be `unknown` when the photo and the real details don't show 
 - **frame_material:** metal, plastic, mixed
 - **lens_colour:** black, grey, brown, green, blue, mirrored, gradient
 - **polarised:** yes, no
+
+**Details for every group:**
+- **From shop data:** cod, returnable, exchange (yes or no).
+- **Only from reviews, never from photos:**
+ - **size_fit:** true to size, runs small, runs large
+ - **durability:** good, poor
+ - **colour_fastness:** good, fades
+ - **colour_match:** as shown, different
 
 ### I. Prompt summaries
 
@@ -893,7 +904,7 @@ Any detail can also be `unknown` when the photo and the real details don't show 
 
 | Item | Rough cost |
 |---|---|
-| Gemini noting details from all 3,000 product photos (one time) | about US$7 |
+| Gemini noting details from all 3,000 product photos (one time) | about US$13 (measured on a 20-product trial: US$0.0044 each) |
 | Writing demo reviews for 3,000 products (one time) | about US$3–5 |
 | Gemini embeddings for 3,000 products | under US$1 |
 | One shopper search (understanding plus about 12 careful checks) | about US$0.03 (₹2–3) |

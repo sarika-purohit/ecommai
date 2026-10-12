@@ -70,6 +70,8 @@ NECKLINE = {
     "Henley Neck": "henley",
     "Henley": "henley",
     "Polo Collar": "polo",
+    "Cowl Neck": "cowl",
+    "Cowl": "cowl",
 }
 PATTERN = {
     "Solid": "solid",
@@ -198,6 +200,8 @@ SHOE_MATERIAL = {
     "PU": "synthetic leather",
     "Faux Leather": "synthetic leather",
     "Suede": "suede",
+    "Synthetic Suede": "suede",
+    "Faux Suede": "suede",
     "Mesh": "mesh",
     "Canvas": "canvas",
     "Knit": "knit",
@@ -235,7 +239,8 @@ STRAP_COLOUR = {
     "Rose Gold Toned": "rose gold",
     "Blue": "blue",
     "Navy Blue": "blue",
-    **dict.fromkeys(["Grey", "White", "Red", "Pink", "Green", "Purple", "Orange", "Yellow", "Maroon"], "other"),
+    "White": "white",
+    **dict.fromkeys(["Grey", "Red", "Pink", "Green", "Purple", "Orange", "Yellow", "Maroon"], "other"),
     **dict.fromkeys(["Beige", "Copper", "Bronze", "Cream", "Off White", "Multi"], "other"),
 }
 STRAP_MATERIAL = {
@@ -267,6 +272,7 @@ CASE_MATERIAL = {
     "Rose Gold Toned": "rose-gold-tone",
 }
 CHRONOGRAPH = {"Chronograph": "yes"}
+NOT_CHRONOGRAPH = dict.fromkeys(["Multi Function", "Multifunction", "Multi Functional"], "no")
 BAG_CLOSURE = {
     "Zip": "zip",
     "Zipper": "zip",
@@ -290,7 +296,17 @@ SUNGLASS_SHAPES = {
     "Oversized": "oversized",
     "Sports": "sport",
 }
-POLARISED = {"Polarised Lens": "yes", "Polarized Lens": "yes", "Non-Polarised Lens": "no", "Non-Polarized Lens": "no"}
+POLARISED = {
+    "Polarised Lens": "yes",
+    "Polarized Lens": "yes",
+    "Polarised and UV Protected Lens": "yes",
+    "Polarized and UV Protected Lens": "yes",
+    "Non-Polarised Lens": "no",
+    "Non-Polarized Lens": "no",
+    "Regular Lens": "no",
+    "Regular Lenses": "no",
+    "Normal Lens": "no",
+}
 
 Rules = dict[str, list[tuple[str, str, dict[str, str]]]]
 
@@ -354,6 +370,16 @@ RULES: Rules = {
             "Ankle Boots": "boots",
             "Running Shoes": "running",
             "Training Shoes": "training",
+            "Flats": "flats",
+            "Flat Shoes": "flats",
+            "Ballerinas": "flats",
+            "Ballerina": "flats",
+            "Ballerina Flats": "flats",
+            "Ballet Flats": "flats",
+            "Mary Janes": "mary janes",
+            "Mary Jane": "mary janes",
+            "Mary Jane Shoes": "mary janes",
+            "Mary Jane Flats": "mary janes",
         }),
         ("Sport", "type", {"Running": "running", "Training or Gym": "training", "Training": "training"}),
         ("Fastening", "closure", {
@@ -389,9 +415,13 @@ RULES: Rules = {
         ("Strap Material", "strap_material", STRAP_MATERIAL),
         ("Strap Colour", "strap_colour", STRAP_COLOUR),
         ("Strap Color", "strap_colour", STRAP_COLOUR),
+        # A watch can list several features; "Chronograph" on any of them beats "Multi Function" on another.
         ("Features", "chronograph", CHRONOGRAPH),
         ("Features 2", "chronograph", CHRONOGRAPH),
         ("Features 3", "chronograph", CHRONOGRAPH),
+        ("Features", "chronograph", NOT_CHRONOGRAPH),
+        ("Features 2", "chronograph", NOT_CHRONOGRAPH),
+        ("Features 3", "chronograph", NOT_CHRONOGRAPH),
     ],
     "bags": [
         ("Type", "type", {
@@ -404,7 +434,8 @@ RULES: Rules = {
             "Clutch": "clutch",
             "Backpack": "backpack",
         }),
-        ("Size", "size", {"Small": "small", "Medium": "medium", "Regular": "medium", "Large": "large"}),
+        # "Regular" is left unmapped: the catalogue uses it for bags of any size (a 58 cm tote, for one).
+        ("Size", "size", {"Small": "small", "Medium": "medium", "Large": "large"}),
         ("Material", "material", {
             "Synthetic Leather": "synthetic leather",
             "PU": "synthetic leather",
@@ -457,6 +488,12 @@ NO_VOCABULARY_KEYS = {
     "Body or Garment Size", "Wash Care", "Multipack Set", "Number of Components", "Warranty", "Make",
     "Power Source", "Movement", "Water Resistance", "Business Unit", "Segment", "Brick", "Family",
     "Class", "Processing Time", "Weave Type", "Weave Pattern", "Brand Fit Name", "Brand",
+}
+
+# Mapped values that mean something else for one article type. The catalogue labels jeans "Fabric: Cotton",
+# and catalogue values beat Gemini's, so left as cotton they would fail a "denim" must-have. Trousers keep cotton.
+ARTICLE_TYPE_VALUES: dict[str, dict[str, dict[str, str]]] = {
+    "Jeans": {"fabric": {"cotton": "denim"}},
 }
 
 CASE_DIAMETER = re.compile(r"\b(?:case\s+(?:diameter|width|size)|dial\s+width)\W{0,5}(\d+(?:\.\d+)?)\s*mm", re.I)
@@ -608,9 +645,13 @@ class Parsed:
 def parse_style(product_id: str, style: dict, article_type: str | None = None) -> Parsed:
     data = style.get("data") if isinstance(style, dict) else None
     data = data if isinstance(data, dict) else {}
-    group = group_for(article_type or article_type_of(data) or "")
+    article_type = article_type or article_type_of(data) or ""
+    group = group_for(article_type)
     raw = clean_raw_attributes(data.get("articleAttributes"))
     attributes, unmapped = map_attributes(group, raw)
+    for attribute, swaps in ARTICLE_TYPE_VALUES.get(article_type, {}).items():
+        if attributes.get(attribute) in swaps:
+            attributes[attribute] = swaps[attributes[attribute]]
     description = description_text(data.get("productDescriptors"))
     if group == "watches" and "case_size" not in attributes and (size := case_size(description)):
         attributes["case_size"] = size

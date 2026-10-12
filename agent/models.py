@@ -135,6 +135,9 @@ class Attribute(BaseModel):
     confidence: float = Field(ge=0, le=1)
     note: str = ""
     source: Literal["gemini", "catalogue"] = "gemini"
+    gemini_value: str | bool | float | None = Field(
+        default=None, description="What Gemini saw in the photo, when the catalogue value was used instead"
+    )
 
 
 class Price(BaseModel):

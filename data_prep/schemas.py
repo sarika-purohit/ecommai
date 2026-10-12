@@ -23,7 +23,7 @@ ARTICLE_TYPE_TO_GROUP: dict[str, str] = {
 VOCABULARY: dict[str, dict[str, list[str]]] = {
     "tops": {
         "sleeve_length": ["sleeveless", "short", "elbow", "three-quarter", "full"],
-        "neckline": ["round", "v-neck", "collar", "mandarin", "boat", "square", "keyhole", "henley", "polo"],
+        "neckline": ["round", "v-neck", "collar", "mandarin", "boat", "square", "keyhole", "henley", "polo", "cowl"],
         "pockets": ["none", "side", "patch", "chest", "hidden"],
         "pattern": ["solid", "stripes", "checks", "floral", "geometric", "printed", "embroidered", "abstract"],
         "print_intensity": ["none", "subtle", "medium", "loud"],
@@ -41,11 +41,14 @@ VOCABULARY: dict[str, dict[str, list[str]]] = {
         "distressed": ["none", "light", "heavy"],
         "stretch": ["yes", "no"],
         "length": ["full", "ankle", "cropped"],
+        "pockets": ["none", "front", "back", "front and back", "cargo"],
         "fabric": ["denim", "cotton", "linen", "polyester", "blend"],
         "usage": ["casual", "office", "party"],
     },
     "shoes": {
-        "type": ["sneakers", "running", "training", "loafers", "slip-on", "boots", "derby", "oxford"],
+        "type": [
+            "sneakers", "running", "training", "loafers", "slip-on", "boots", "derby", "oxford", "flats", "mary janes",
+        ],
         "closure": ["laces", "velcro", "slip-on", "buckle", "zip"],
         "sole_type": ["flat", "cushioned", "chunky", "platform"],
         "sole_colour": ["white", "off-white", "black", "brown", "gum", "grey", "other"],
@@ -62,7 +65,7 @@ VOCABULARY: dict[str, dict[str, list[str]]] = {
         "case_material": ["steel", "gold-tone", "rose-gold-tone", "black metal", "plastic"],
         "case_size": ["small", "medium", "large"],
         "strap_material": ["steel", "leather", "silicone", "fabric", "mesh", "ceramic"],
-        "strap_colour": ["black", "brown", "silver", "gold", "rose gold", "blue", "other"],
+        "strap_colour": ["black", "brown", "silver", "gold", "rose gold", "blue", "white", "other"],
         "chronograph": ["yes", "no"],
     },
     "bags": {
@@ -85,7 +88,8 @@ VOCABULARY: dict[str, dict[str, list[str]]] = {
 VALUE_HINTS: dict[tuple[str, str], str] = {
     ("watches", "case_size"): "small is under 36 mm, medium is 36-42 mm, large is over 42 mm",
     ("tops", "print_intensity"): "how loud the print looks from a distance; none for plain fabric",
-    ("tops", "sheerness"): "only judge from reviews or the real details; a photo alone rarely shows this",
+    ("tops", "sheerness"): "never judge from the photo; only from reviews or the real details",
+    ("tops", "pockets"): "chest means any pocket on the chest; side means pockets in the side seams",
 }
 
 # Shop details that apply to every group. They're checked from shop data, not from photos.
@@ -95,13 +99,21 @@ SHOP_ATTRIBUTES: dict[str, list[str]] = {
     "exchange": ["yes", "no"],
 }
 
+# Details that apply to every group but only reviews can show. Never noted from photos.
+REVIEW_ATTRIBUTES: dict[str, list[str]] = {
+    "size_fit": ["true to size", "runs small", "runs large"],
+    "durability": ["good", "poor"],
+    "colour_fastness": ["good", "fades"],
+    "colour_match": ["as shown", "different"],
+}
+
 
 def group_for(article_type: str) -> str | None:
     return ARTICLE_TYPE_TO_GROUP.get(article_type)
 
 
 def attributes_for(group: str) -> dict[str, list[str]]:
-    return {**VOCABULARY[group], **SHOP_ATTRIBUTES}
+    return {**VOCABULARY[group], **SHOP_ATTRIBUTES, **REVIEW_ATTRIBUTES}
 
 
 def is_allowed(group: str, attribute: str, value: str) -> bool:

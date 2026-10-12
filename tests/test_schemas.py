@@ -1,6 +1,7 @@
 from data_prep.schemas import (
     ARTICLE_TYPE_TO_GROUP,
     GROUPS,
+    REVIEW_ATTRIBUTES,
     SHOP_ATTRIBUTES,
     UNKNOWN,
     VOCABULARY,
@@ -34,9 +35,15 @@ def test_group_lookup():
     assert group_for("Socks") is None
 
 
-def test_shop_attributes_apply_to_every_group():
+def test_shop_and_review_attributes_apply_to_every_group():
     for group in GROUPS:
         assert set(SHOP_ATTRIBUTES) <= set(attributes_for(group))
+        assert set(REVIEW_ATTRIBUTES) <= set(attributes_for(group))
+
+
+def test_review_attributes_are_never_asked_of_photos():
+    for attributes in VOCABULARY.values():
+        assert not set(REVIEW_ATTRIBUTES) & set(attributes)
 
 
 def test_is_allowed():

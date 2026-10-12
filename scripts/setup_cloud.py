@@ -164,7 +164,7 @@ def create_armor_template(api: Api, project: str, location: str, template: str) 
     code, _ = api.call("GET", f"{base}/{template}")
     if code == 200:
         return Result("model armor template", "exists", template)
-    # MEDIUM_AND_ABOVE missed gentle review tricks; LOW_AND_ABOVE caught them without flagging normal reviews.
+    # MEDIUM_AND_ABOVE missed obvious review tricks that LOW_AND_ABOVE catches, and LOW_AND_ABOVE flagged no normal reviews.
     filters = {"piAndJailbreakFilterSettings": {"filterEnforcement": "ENABLED", "confidenceLevel": "LOW_AND_ABOVE"}}
     code, body = api.call("POST", f"{base}?templateId={template}", json={"filterConfig": filters})
     if code >= 400:

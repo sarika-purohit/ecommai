@@ -1,0 +1,4 @@
+{"id": "1001", "brand": "Fabindia", "description": "White kurta made of 100% cotton, with three-quarter sleeves and a round neck.\nWash care\nHand wash", "mrp": 1299, "selling_price": 999, "attributes": {"fabric": "cotton", "sleeve_length": "three-quarter"}, "raw_attributes": {}}
+{"id": "1004", "brand": "Roadster", "description": "Pink top with short sleeves.", "mrp": 799, "selling_price": 599, "attributes": {"sheerness": "opaque"}, "raw_attributes": {"Transparency": "Opaque"}}
+{"id": "1013", "brand": "Rocia", "description": "Gold clutch with a magnetic flap.", "mrp": 1499, "selling_price": 1199, "attributes": {"closure": "magnetic"}, "raw_attributes": {}}
+{"id": "1014", "brand": "Ray-Ban", "description": "Aviator sunglasses with polarised lenses.", "mrp": 6990, "selling_price": 6990, "attributes": {"frame_shape": "aviator", "polarised": "yes"}, "raw_attributes": {}}
