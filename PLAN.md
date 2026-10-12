@@ -10,9 +10,11 @@
 
 1. [What we're building](#1-what-were-building)
 2. [What makes it different](#2-what-makes-it-different)
+   - [2.1 More ways to stand out](#21-more-ways-to-stand-out)
 3. [Setup we need to do first](#3-setup-we-need-to-do-first)
 4. [How the agent works](#4-how-the-agent-works)
 5. [Architecture](#5-architecture)
+   - [Works inside Gemini, ChatGPT and other AI apps](#works-inside-gemini-chatgpt-and-other-ai-apps)
 6. [Data: what we have and what we add](#6-data-what-we-have-and-what-we-add)
 7. [App design](#7-app-design)
 8. [Repo layout](#8-repo-layout)
@@ -94,12 +96,37 @@ The agent then:
  - prompt-injection defence (Model Armor);
  - an evaluation harness.
 - **Problem Alignment & Impact, 25%:** fewer wrong buys and returns, less time spent, and a number that shows it.
-- **Innovation, 25%:** verified must-haves with proof, the "I saw it" picture loop, and an honest "unclear".
+- **Innovation, 25%:** verified must-haves with proof, the "I saw it" picture loop, an honest "unclear", and telling you what to give up when nothing matches (section 2.1).
 - **User Experience, 10%:**
  - live "checking 18 products…" progress;
  - tick-lists on each result;
  - Hinglish voice;
  - a mobile-first layout.
+
+### 2.1 More ways to stand out
+
+Checking every must-have with proof is our main difference. The extras below make the product harder to copy and the demo stronger. Each one is marked:
+
+- **Build now:** fits in the 5 days;
+- **If time:** only after the core works end to end on Cloud Run;
+- **Later:** pitch it as our roadmap.
+
+| Idea | What it means for the shopper | Example | When |
+|---|---|---|---|
+| **When nothing matches, it tells you what to give up** | Instead of "no results", the agent shows which must-have is blocking you and what you'd get if you relaxed it | "No cotton kurta with pockets under ₹1,200 arrives by Thursday. Allow Friday: 3 options. Allow ₹1,400: 5 options. Drop pockets: 9 options." | **Build now.** Re-run the search with each must-have relaxed once (about half a day) |
+| **Indian must-haves built in** | Cash on delivery (COD), easy return or exchange, total cost including the COD fee, delivery date to your pincode | "Must be COD and returnable" is checked like any other must-have | **Build now.** Add these fields to the simulated data |
+| **Your personal rulebook** | Rules you set once that apply to every search | "Never polyester", "no big logos", "always pockets", "nothing above ₹2,000" | **Build now.** A saved list in Firestore, merged into every brief and shown as chips |
+| **No paid placement, ranking explained** | Results are never sponsored, and every position is explained | "#1 because: meets every must-have, closest to your style, arrives first" | **Build now.** A policy, plus the reason line we already show |
+| **It keeps looking for you** | Save a request; the agent re-checks new stock every day and tells you when a verified match appears or the price drops | "Tell me when a kurta that meets all my must-haves drops below ₹1,000" | **If time.** Cloud Scheduler runs saved searches; the alert shows in the app |
+| **Share the shortlist on WhatsApp** | Send 3 options with their tick-lists to family or friends for a quick vote | A "Which one should I take?" link opens the shortlist with its ticks | **If time.** A share link plus WhatsApp's share URL; no WhatsApp API needed |
+| **Works inside Gemini, ChatGPT and other AI apps** | The same agent answers inside the assistant people already use | See section 5, "Works inside Gemini, ChatGPT and other AI apps" | **If time.** About half a day: MCP and A2A on the same Cloud Run service |
+| **Share from any app (Android)** | In Instagram or a shopping app, tap Share → EcommAI → "check this against my must-haves" | Share a product link or screenshot and get the tick-list | **If time.** An installable web app with a share target (about 2 hours) |
+| **Public accuracy page** | A page in the app showing how often our ticks were right on our test set | "Our 'pass' was correct 96% of the time on 50 test requests" | **If time.** Publish the `run_eval.py` results |
+| **One budget, many items** | Plan a whole look or kit within one budget, with every item checked | "Office look under ₹4,000: kurta, flats and a tote, all matching, all arriving by Friday" | **Later.** Needs a budget split and style matching across items |
+| **Return-risk warning** | Flags items that reviews say run small or look different from the photo | "12 of 40 reviewers say it runs small: take L" | **Later.** Works best with real review data |
+| **Nearby shops too** | Include local stores on ONDC (India's open shopping network), so you can pick it up today | "Available at a shop 2 km away, ready by 6 pm" | **Later.** Needs ONDC registration |
+
+**Our pick for the demo:** the core plus "what to give up", Indian must-haves and the personal rulebook. Together they make the checking feel smart, local and personal, and none of them needs outside approvals.
 
 ---
 
@@ -197,6 +224,7 @@ The rules for this step:
 - **Turn relative dates into real dates.** "Thursday" becomes `2026-10-15`, based on today's date in India time.
 - **Ask at most one short question, and only if the answer changes the results.** For example: "Which size do you usually wear?" Never ask about things we can show.
 - **Edit the brief from follow-ups.** "Cheaper", "more formal" or "no, short sleeves" update the existing brief rather than starting over.
+- **Merge the shopper's personal rulebook** into the must-haves, for example "never polyester", "no big logos" or "always COD". These show as locked chips the shopper can switch off for this one search.
 - **Show the brief to the shopper as editable chips:** `cotton ✓` `pockets ✓` `¾ sleeves ✓` `not see-through ✓` `≤ ₹1,200` `by Thu`. They can see what we understood before results appear.
 
 ### Step 2: Find candidates (aim for high recall)
@@ -256,6 +284,7 @@ It returns, for **each must-have**:
  - delivery speed;
  - review rating.
 - **Variety:** near-duplicates are shown once.
+- **When nothing (or fewer than 3 items) passes, say what to give up.** Re-run the check with each limit relaxed one at a time: the deadline by 1–2 days, the budget by about 20%, or one must-have dropped. Then show what each change would give: "Allow Friday: 3 options · Allow ₹1,400: 5 · Drop pockets: 9". The shopper taps one to apply it. This is cheap because the candidates are already checked, so we only recount.
 - **One-line reason per item**, in the shopper's language. For example: "Has pockets and ¾ sleeves; reviews say it's thick cotton; arrives Wednesday."
 
 ### Step 5: Act
@@ -305,6 +334,8 @@ flowchart LR
 | `rank_and_explain` (function tool plus a short Gemini call for the reasons) | Step 4 |
 | `delivery_eta`, `checkout_link` (function tools) | Step 5 |
 | `seen_it_agent` (LLM agent) plus `generate_variants` (tool) | "I saw it" mode |
+| `apply_rules`, `suggest_tradeoffs` (function tools) | Personal rulebook in step 1; "what to give up" in step 4 |
+| MCP server and A2A wrapper | The same workflow exposed to Gemini, ChatGPT and other AI apps (section 5) |
 | Root workflow | Runs the steps in order and streams progress events to the app |
 
 We use `adk web` for local testing and `adk eval` for the evaluation set. The agent runs behind **FastAPI on Cloud Run**, with sessions stored in Firestore so a server restart doesn't lose them.
@@ -352,6 +383,68 @@ flowchart LR
 - **Cost stays low because of the two-tier check:** most products are filtered out by pre-computed attributes before any Gemini call.
 - **Delivery and checkout move to real partners:** courier APIs (Shiprocket, ClickPost), UCP checkout, and affiliate links for marketplaces.
 
+### Works inside Gemini, ChatGPT and other AI apps
+
+People increasingly shop by asking their AI assistant. So besides our own app, we expose the same agent through two standard "plugs" that AI apps understand. We build the brain once, and every app below becomes another way in.
+
+- **MCP (Model Context Protocol):** lets an AI app call our tools.
+- **A2A (Agent-to-Agent):** lets another AI agent hand a whole task to our agent.
+
+Both run on the **same Cloud Run service** as our API, and ADK supports both. It's about half a day of work.
+
+```mermaid
+flowchart LR
+  subgraph Doors["Ways in"]
+    O["Our web app"]
+    GS["Gemini app<br/>Custom apps for Spark (MCP)"]
+    GE["Gemini Enterprise<br/>A2A agent"]
+    CG["ChatGPT<br/>Apps SDK (MCP)"]
+    CL["Claude and other<br/>MCP assistants"]
+    WA["WhatsApp share link"]
+    SH["Android share button"]
+  end
+  Doors --> CORE["EcommAI agent on Cloud Run<br/>brief, find, check, rank"]
+  CORE --> DATA[("Firestore + Cloud Storage<br/>catalogue, vectors, users")]
+```
+
+**The MCP tools we expose:**
+
+| Tool | What it does | Returns |
+|---|---|---|
+| `find_products` | Takes a plain-language request, plus an optional budget, pincode and deadline | Verified matches with tick-lists, proof and a link to each product |
+| `refine_search` | Edits the last request ("cheaper", "more formal", "allow Friday") | Updated matches, or what to give up if nothing matches |
+| `get_product` | Full details and all the evidence for one product | Product with evidence |
+| `delivery_date` | Delivery estimate to a pincode | Date and cost |
+| `buy_link` | A link to the store's checkout for a product and size | A URL; the shopper confirms on the store's site |
+
+**The A2A agent card**, used by Gemini Enterprise and other agents, describes one skill, "find verified products":
+- **input:** request, budget, pincode, deadline;
+- **output:** matches with tick-lists;
+- **streaming:** supported, since Gemini Enterprise requires A2A v0.3 streaming.
+
+**Where it can plug in (as of Oct 2026):**
+
+| Where | How | The catch right now |
+|---|---|---|
+| **Gemini app (consumer)** | Users add our MCP server link in Gemini on the web (Connected Apps → Custom apps for Spark). It then works on Gemini web and mobile | US only, English, personal accounts, needs Gemini Spark. Gemini asks the user to confirm actions. No public catalogue for listing apps yet |
+| **Gemini Enterprise** | A company admin registers us as an A2A agent and staff call `@ecommai`. We can also list it on Google Cloud Marketplace | Business users, not shoppers. Fits the "brands and shopping apps" partner story |
+| **ChatGPT** | Build a ChatGPT app with OpenAI's Apps SDK (MCP-based), submit it for review, and it gets listed in the Plugins directory | Depends on country and plan. Purchases must go to the store's own site. ChatGPT's built-in shopping is US-only |
+| **Claude and other MCP assistants** | The same MCP link, added as a custom connector | Mostly paid plans |
+| **WhatsApp** | A shortlist share link now (no API needed). Later, a WhatsApp Business bot that takes voice notes and screenshots | The bot needs a WhatsApp Business account and approved message templates |
+| **Android share button** | Once our web app is installed, it appears in the share menu of Instagram, shopping apps and the gallery | Android first; iPhone support for web share targets is limited |
+| **Brands' own sites** | A search widget or Shopify app using the same API | Needs a business deal per brand (see the business slide) |
+
+**Rules for every way in:**
+- the shopper confirms before anything is bought, and checkout happens on the store's site;
+- we never ask for passwords to other shopping sites;
+- MCP and A2A requests are authenticated (OAuth) and rate-limited;
+- inputs from other apps go through the same Model Armor and schema checks.
+
+**For the hackathon:**
+- Our own app stays the main demo. The judges score our UX, and the rules require a deployed app.
+- If time allows, add a 5–10 second moment showing the same agent answering through A2A, for example from Gemini Enterprise or ADK's test UI. That signals "built for Google's agent ecosystem".
+- Mention ChatGPT and Claude only on the business slide. Don't demo ChatGPT in a Google competition.
+
 ---
 
 ## 6. Data: what we have and what we add
@@ -390,6 +483,7 @@ flowchart LR
  - **Price (MRP and selling price)** by article type and brand tier. For example, kurtas cost ₹499–2,999 and watches ₹999–14,999.
  - **Sizes and stock**, including some sizes out of stock.
  - **Warehouse city** (Mumbai, Delhi, Bengaluru, Kolkata) and **delivery fee**.
+ - **Cash on delivery, return and exchange policy** per product, including a COD fee and some non-returnable items, so Indian must-haves like "COD and returnable" can be checked.
  - **3–6 short reviews per product.** Gemini writes these, based on the attributes, with realistic problems for some items. For example, about 15% of light-coloured thin kurtas get "slightly see-through" reviews, and some watches get "strap runs small". This gives the checker real work to do.
 5. **Build embeddings** (`data_prep/embed.py`). Use Gemini Embedding 2 on the photo plus the text description and key attributes, with 768 dimensions. Store them in each product's `embedding` field in Firestore.
 6. **Create the Firestore vector index** with filter fields (`articleType`, `gender`).
@@ -416,6 +510,8 @@ products/{productId}
   sizes { S: 4, M: 0, L: 7, XL: 2 }      // stock per size
   warehouse { city: "Mumbai", pincode: "400072" }
   delivery_fee
+  cod { available: true, fee: 49 }
+  returns { returnable: true, window_days: 7, exchange: true }
   reviews [ { rating, text, simulated: true } ]
   rating_avg, rating_count
   images [ "https://storage.googleapis.com/ecommai-catalog/images/15970.jpg" ]
@@ -427,6 +523,8 @@ users/{userId}
   pincode, language, sizes { "<brand>": "M" }
   taste { "<articleType>": vector(768) }
   likes [productId], dislikes [productId]
+  rules [ "never polyester", "no big logos", "always COD" ]   // personal rulebook
+  watches [ { brief, notify: "price_below:1000", lastRun } ]  // "keeps looking for you"
 
 sessions/{sessionId}
   userId, brief, history[], results[], feedback[], createdAt
@@ -460,9 +558,11 @@ sessions/{sessionId}
  - tapping a tick shows the proof: a photo crop or a review quote.
  - **Footer:** "4 more we couldn't fully confirm" (collapsed) and "Why others were rejected: 6 no pockets · 2 see-through · 3 late".
  - **Refine chips:** `cheaper` `more formal` `different colour` `show unclear ones`.
+ - **If nothing matches:** "What to give up" cards instead of an empty page, for example "Allow Friday → 3 options", "Allow ₹1,400 → 5", "Drop pockets → 9". One tap applies the change.
+ - **Share:** "Send these 3 to WhatsApp" opens a shortlist page with the tick-lists (if time).
 5. **Product detail.** The photos, all the evidence, the reviews summary, a size picker and a "Buy on store" button that opens the mock partner checkout.
 6. **"I saw it".** The questions as big tap targets, a 2×2 grid of generated pictures, then "Closer to which one? Anything to change?" and finally "Yes, that's it" before searching.
-7. **Profile (add-on).** Pincode, sizes per brand, and "what we've learned about your taste", with a clear button.
+7. **Profile.** Pincode and **my rules**, the personal rulebook ("never polyester", "always COD"). As add-ons: sizes per brand, saved searches ("keeps looking for you"), and "what we've learned about your taste", with a clear button.
 
 **Visual style:** clean and light. Ticks are green, crosses red, "unclear" grey. The font is large enough for older shoppers. All text strings sit in one file so a Hindi version is easy to add.
 
@@ -491,11 +591,18 @@ ecommai/
     rank.py                 # rank_and_explain
     seen_it.py              # "I saw it" questions + picture generation
     delivery.py             # simulated delivery dates
+    rules.py                # personal rulebook, merged into every brief
+    tradeoffs.py            # "what to give up" when nothing (or little) matches
+    watch.py                # saved searches re-checked daily (Cloud Scheduler), if time
+    share.py                # shortlist pages for WhatsApp sharing, if time
+    mcp_server.py           # MCP tools for other AI apps (find_products, refine_search, ...)
+    a2a_card.json           # A2A agent card (Gemini Enterprise, other agents)
     models.py               # Pydantic models: ShoppingBrief, Verification, ...
     prompts/                # prompt templates (section 10)
     Dockerfile
   web/
-    (Next.js app: Home, Understood, Checking, Results, Detail, I saw it, Profile)
+    (Next.js app: Home, Understood, Checking, Results, Detail, I saw it, Profile;
+     installable web app with an Android share target)
   eval/
     requests.jsonl          # 50 test requests with must-haves
     labels.jsonl            # which products truly meet every must-have
@@ -521,6 +628,11 @@ The existing `images/`, `chroma_fashion_db/` and `production_fashion_catalog.csv
 | `POST /api/seen/choose` | `{ session_id, image_id, change_note? }` | `{ reference_image_url }` (then call `/api/search`) |
 | `POST /api/feedback` | `{ session_id, product_id, action: like \| dislike \| buy }` | `{ ok }` |
 | `POST /api/checkout` | `{ product_id, size }` | `{ redirect_url }` (mock partner store) |
+| `GET /api/rules` · `PUT /api/rules` | `{ rules: ["never polyester", "no big logos"] }` | `{ rules }`, merged into every brief |
+| `POST /api/watch` | `{ session_id, notify: "price_below:1000" }` | `{ watch_id }`, re-checked daily (if time) |
+| `POST /api/share` | `{ session_id, product_ids[] }` | `{ share_url }`: a shortlist page with tick-lists for WhatsApp (if time) |
+| `/mcp` | MCP over Streamable HTTP | Tools for other AI apps (section 5) |
+| `/.well-known/agent-card.json` and `/a2a` | A2A | Our agent for Gemini Enterprise and other agents |
 
 **Example `done` summary:**
 
@@ -531,6 +643,19 @@ The existing `images/`, `chroma_fashion_db/` and `production_fashion_catalog.csv
   "unclear": 4,
   "rejected": { "no pockets": 6, "see-through": 2, "late delivery": 3 },
   "elapsed_ms": 5200
+}
+```
+
+**When nothing (or very little) matches**, the `done` event also includes what to give up:
+
+```json
+{
+  "passed": 0,
+  "tradeoffs": [
+    { "relax": "deadline",          "to": "Fri 16 Oct", "matches": 3 },
+    { "relax": "budget",            "to": 1400,         "matches": 5 },
+    { "relax": "must_have:pockets",                     "matches": 9 }
+  ]
 }
 ```
 
@@ -619,18 +744,19 @@ Judges reward one hard number. Ours is:
 |---|---|---|
 | **Mon Oct 12 (tonight)** | Setup | Google Cloud project, billing, APIs, Firestore, bucket (section 3). Laptops set up. Branch protection on `main`. Write 50 test requests (shared sheet). |
 | **Tue Oct 13** | Data ready | `select_catalog.py` → `upload_images.py` → `enrich.py` (run overnight if needed) → `simulate.py` → `embed.py` → vector index. Spot-check 100 items. **Web:** layout of Home, Understood and Results with fake data. |
-| **Wed Oct 14** | Agent working end to end | Brief → find → quick check → deep check → rank, with streaming progress. Deploy to Cloud Run. **Web:** connect to the API, show the live checking and the tick-lists. |
-| **Thu Oct 15** | Wow features + numbers | Press-to-talk voice (Hinglish), photo mode, "I saw it" mode. Delivery dates. Run `run_eval.py` and fix the worst misses. Model Armor on. |
+| **Wed Oct 14** | Agent working end to end | Brief → find → quick check → deep check → rank, with streaming progress. Indian must-haves (COD, returns) and the personal rulebook merged into the brief. Deploy to Cloud Run. **Web:** connect to the API, show the live checking and the tick-lists. |
+| **Thu Oct 15** | Wow features + numbers | "What to give up" suggestions. Press-to-talk voice (Hinglish), photo mode, "I saw it" mode. Delivery dates. Run `run_eval.py` and fix the worst misses. Model Armor on. **If time:** MCP + A2A plug (about half a day), WhatsApp share link, Android share target. |
 | **Fri Oct 16** | Polish + story | UI polish, a test login, seeded examples. Record the video (2:50 max), make the deck PDF, write the README. Full dry run on the deployed link. |
 | **Sat Oct 17** | Submit | Make the repo public, final checks (section 18), submit, freeze `main`. Keep it running through Nov 6. |
 
 **If we fall behind, cut in this order:**
-1. live voice (keep press-to-talk);
-2. "I saw it" picture generation (keep the questions and text search);
-3. the taste profile;
-4. the Profile screen.
+1. the "if time" extras: the MCP and A2A plug, the WhatsApp share link, the Android share target, saved searches, the accuracy page;
+2. live voice (keep press-to-talk);
+3. "I saw it" picture generation (keep the questions and text search);
+4. the taste profile;
+5. the Profile screen.
 
-**Never cut:** the brief, the checking with proof, the results screen, the evaluation number, and the Cloud Run deploy.
+**Never cut:** the brief, the checking with proof, "what to give up", the results screen, the evaluation number, and the Cloud Run deploy.
 
 ---
 
@@ -655,9 +781,9 @@ With 2–3 people, merge the Story role with Frontend, and Data with Agent.
 | 0:15–0:35 | She says it in Hinglish to EcommAI. The **Understood** chips appear: cotton, pockets, ¾ sleeves, not see-through, ≤ ₹1,200, by Thursday. |
 | 0:35–1:05 | **Live checking:** "Found 40 · Checking 12". Cards flip to ✓ or fade: "no pockets", "reviews say see-through", "arrives Saturday". |
 | 1:05–1:30 | **Results:** 4 exact matches. She taps "pockets ✓" to see the photo crop, then "not see-through ✓" to see "14 of 16 reviews agree". Price includes delivery; arrives Wednesday. |
-| 1:30–2:00 | **Refine:** "thoda formal" ("a bit more formal") re-ranks the results. **Buy** hands off to the store checkout. |
+| 1:30–2:00 | **Refine and trade-offs:** "thoda formal" ("a bit more formal") re-ranks the results. "Kal tak chahiye" ("I need it by tomorrow") leaves no exact match, so the agent shows what to give up: "Allow Thursday: 3 options · Allow ₹1,400: 5". She picks one and **Buy** hands off to the store checkout. |
 | 2:00–2:25 | **"I saw it":** Arjun describes the watch from memory. One question, four pictures, "thinner", then "that's it". Five real watches under ₹8,000. |
-| 2:25–2:50 | **Numbers and architecture:** "Plain search: X% of top results meet every must-have. EcommAI: Y%." The Google Cloud architecture in one diagram. Close: "Say it once. Get exactly what you asked for." |
+| 2:25–2:50 | **Numbers and architecture:** "Plain search: X% of top results meet every must-have. EcommAI: Y%." The Google Cloud architecture in one diagram. If built, show the same agent answering inside Gemini Enterprise through A2A for 5 seconds. Close: "Say it once. Get exactly what you asked for." |
 
 ---
 
@@ -667,14 +793,14 @@ With 2–3 people, merge the Story role with Frontend, and Data with Agent.
 2. The problem: search ignores real requests, leading to wasted time, wrong buys and returns.
 3. Neha's story: before and after.
 4. How it works: the 6-step agent.
-5. The core: checking every must-have with proof, and being honest with "unclear".
+5. The core: checking every must-have with proof, being honest with "unclear", and telling you what to give up when nothing matches. Plus Indian must-haves (COD, returns) and the personal rulebook.
 6. The "I saw it" mode.
 7. Architecture on Google Cloud: Gemini, ADK, Cloud Run, Firestore, Model Armor.
 8. Results: our numbers compared with plain search, plus speed and cost per search.
 9. Business:
  - start with affiliate commission;
  - then a "verified search" plug-in for shopping apps and brands, including Shopify stores and ONDC buyer apps;
- - later, other AI agents call us through A2A or MCP.
+ - the same agent works inside Gemini, ChatGPT and other AI apps through MCP and A2A, making us the "verified search" any assistant can call.
 10. What's next: real store connections (UCP, Shopify catalog), courier delivery APIs, taste and size add-ons. Then the team.
 
 ---
@@ -691,6 +817,8 @@ With 2–3 people, merge the Story role with Frontend, and Data with Agent.
 | Simulated data looks fake | Realistic price ranges and reviews with real-sounding issues. Label it clearly as demo data |
 | Free-tier limits or quota errors (HTTP 429) | Use Agent Platform with billing, retries with backoff, and cache briefs and verifications |
 | Live voice is flaky | Press-to-talk first; live voice is only a stretch goal |
+| Extras eat into core time | Time-box them: start extras only after the core works end to end on Cloud Run (Thursday), and follow the cut order |
+| Other AI apps change their rules or regions | Our own app is the product; the plugs are extra ways in |
 | Out of time | Follow the cut order in section 12 |
 
 ---
@@ -701,6 +829,8 @@ With 2–3 people, merge the Story role with Frontend, and Data with Agent.
 - No real payments. Checkout hands off to a mock partner store.
 - No virtual try-on. It's crowded, and it shows how something looks, not whether it fits.
 - No general chatbot. Every Gemini call has one clear job and a schema.
+- No ChatGPT demo in the video, since this is a Google competition. ChatGPT and Claude appear only on the business slide.
+- No WhatsApp bot during the hackathon. We only build share links.
 
 ---
 
