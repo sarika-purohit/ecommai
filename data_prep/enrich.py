@@ -14,6 +14,7 @@ off. Token usage and cost for every run are kept next to the output in <out>.usa
 files to start over.
 
     python -m data_prep.enrich                                   # every product not yet done
+    python -m data_prep.enrich --mode batch                      # the same, one Vertex batch job
     python -m data_prep.enrich --ids-file data/trial_ids.txt \\
         --out data/trials/enriched_trial.jsonl --report data/trials/enrich_trial.md
 """
@@ -336,10 +337,12 @@ class Usage:
         self.output_tokens += other.output_tokens
         self.thinking_tokens += other.thinking_tokens
 
-    def cost(self) -> float:
+    def cost(self, *, batch: bool = False) -> float:
+        # Batch prediction is half the standard price (same promotional window, until 31 Dec 2026).
+        scale = 0.5 if batch else 1.0
         uncached = self.prompt_tokens - self.cached_tokens
         output = self.output_tokens + self.thinking_tokens
-        return (uncached * PRICE_INPUT + self.cached_tokens * PRICE_CACHED_INPUT + output * PRICE_OUTPUT) / 1e6
+        return scale * (uncached * PRICE_INPUT + self.cached_tokens * PRICE_CACHED_INPUT + output * PRICE_OUTPUT) / 1e6
 
 
 @dataclass
@@ -518,7 +521,7 @@ def read_usage_log(out: Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
 
 
-def append_usage_log(out: Path, settings: Settings, result: RunResult, fresh: bool) -> list[dict]:
+def append_usage_log(out: Path, settings: Settings, result: RunResult, fresh: bool, *, batch: bool = False) -> list[dict]:
     runs = [] if fresh else read_usage_log(out)
     if result.usage.calls:
         runs.append(
@@ -526,13 +529,14 @@ def append_usage_log(out: Path, settings: Settings, result: RunResult, fresh: bo
                 "finished": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "model": settings.model,
                 "thinking_level": settings.thinking_level,
+                "mode": "batch" if batch else "sync",
                 "concurrency": settings.concurrency,
                 "written": result.written,
                 "failed": len(result.failed),
                 "seconds": round(result.seconds, 1),
                 "mean_call_seconds": round(sum(result.call_seconds) / max(1, len(result.call_seconds)), 2),
                 **asdict(result.usage),
-                "cost_usd": round(result.usage.cost(), 5),
+                "cost_usd": round(result.usage.cost(batch=batch), 5),
             }
         )
         usage_path(out).write_text(json.dumps(runs, indent=2) + "\n", encoding="utf-8")
@@ -546,17 +550,18 @@ def total_usage(runs: Iterable[dict]) -> Usage:
     return total
 
 
-def summary(result: RunResult, settings: Settings) -> str:
+def summary(result: RunResult, settings: Settings, *, batch: bool = False) -> str:
     usage = result.usage
-    per_product = usage.cost() / result.written if result.written else 0.0
+    per_product = usage.cost(batch=batch) / result.written if result.written else 0.0
+    how = "batch prediction" if batch else f"{settings.concurrency} calls at a time"
     lines = [
-        f"Model {settings.model}, thinking level {settings.thinking_level}, {settings.concurrency} calls at a time",
+        f"Model {settings.model}, thinking level {settings.thinking_level}, {how}",
         f"Products: {result.requested:,} requested, {result.already_done:,} already done, "
         f"{result.written:,} written, {len(result.failed):,} failed, {result.retried:,} needed a retry",
         f"Answers received: {usage.calls:,} in {result.seconds:.0f} s",
         f"Tokens: {usage.prompt_tokens:,} input ({usage.cached_tokens:,} cached), "
         f"{usage.output_tokens:,} output, {usage.thinking_tokens:,} thinking",
-        f"Estimated cost: US${usage.cost():.4f} (US${per_product:.5f} per product written)",
+        f"Estimated cost: US${usage.cost(batch=batch):.4f} (US${per_product:.5f} per product written)",
     ]
     return "\n".join(lines)
 
@@ -724,6 +729,145 @@ def report(
     return "\n".join(lines)
 
 
+# ---------- Batch mode ----------
+
+
+def _notes_map(text: str) -> dict[str, str]:
+    notes = {}
+    for line in text.splitlines():
+        name, separator, note = line.partition(":")
+        if separator and name.strip():
+            notes[name.strip()] = note.strip()
+    return notes
+
+
+def expand_batch_text(group: str, text: str) -> str:
+    """Turn the flat batch JSON into the nested answer parse_answer already accepts."""
+    data = json.loads(text)
+    if isinstance(data, dict) and isinstance(data.get("details"), dict):
+        return text
+    notes = _notes_map(str(data.get("notes") or ""))
+    details = {}
+    for name in VOCABULARY[group]:
+        raw = str(data.get(f"{name}_c", "c0")).strip()
+        if raw.startswith("c") and raw[1:].isdigit():
+            confidence = int(raw[1:]) / 10
+        else:
+            try:
+                confidence = float(raw)
+            except ValueError:
+                confidence = 0.0
+        details[name] = {"note": notes.get(name, ""), "value": data.get(name, UNKNOWN), "confidence": confidence}
+    return json.dumps({"details": details, "description": str(data.get("description") or "")})
+
+
+BATCH_JSON = (
+    "Return JSON only, shaped as "
+    '{"description": "...", "details": {"<name>": {"note": "...", "value": "<allowed value or unknown>", "confidence": 0.0}}}. '
+    "Include every detail named in the user message. confidence is a number from 0 to 1."
+)
+
+
+def enrich_line(product: ProductInput, settings: Settings) -> dict:
+    from data_prep.vertex_batch import request_line
+
+    line = request_line(
+        product.id,
+        [photo_part(product, "uri", download), product_prompt(product)],
+        generation_config(product.group, settings),
+        model=settings.model,
+    )
+    request = line["request"]
+    # The per-group schema compiles past Vertex batch's grammar limit (about 5888, or 64KB of
+    # regex). Sync calls still send the schema. Batch asks for the same JSON in the prompt
+    # and parse_answer rejects anything outside the vocabulary.
+    request.get("generationConfig", {}).pop("responseSchema", None)
+    instruction = request.get("systemInstruction")
+    if isinstance(instruction, dict):
+        parts = instruction.setdefault("parts", [])
+        if parts and isinstance(parts[0], dict) and "text" in parts[0]:
+            parts[0]["text"] = parts[0]["text"].rstrip() + "\n\n" + BATCH_JSON
+        else:
+            parts.append({"text": BATCH_JSON})
+    return line
+
+
+def add_batch_usage(usage: Usage, item: Any) -> None:
+    if not (item.prompt_tokens or item.output_tokens or item.thinking_tokens or item.text):
+        return
+    usage.calls += 1
+    usage.prompt_tokens += item.prompt_tokens
+    usage.cached_tokens += item.cached_tokens
+    usage.output_tokens += item.output_tokens
+    usage.thinking_tokens += item.thinking_tokens
+
+
+def apply_batch_results(
+    products: Sequence[ProductInput],
+    items: dict[str, Any],
+    settings: Settings,
+    out: Path,
+) -> RunResult:
+    """Validate and merge batch answers. Anything missing or invalid is left in `failed` for a sync retry."""
+    done = read_done(out)
+    result = RunResult(requested=len(products), already_done=sum(product.id in done for product in products))
+    pending = [product for product in products if product.id not in done]
+    if not pending:
+        return result
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("a", encoding="utf-8") as handle:
+        for product in pending:
+            item = items.get(product.id)
+            if item is None:
+                result.failed[product.id] = "no batch result"
+                continue
+            add_batch_usage(result.usage, item)
+            if item.error or not item.text:
+                result.failed[product.id] = item.error or "empty answer"
+                continue
+            try:
+                row = merge(product, parse_answer(product.group, expand_batch_text(product.group, item.text)), settings.model)
+            except BadAnswer as error:
+                result.failed[product.id] = f"bad answer: {error}"
+                continue
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+            result.written += 1
+    return result
+
+
+def default_job_name(out: Path) -> str:
+    if out.name == "enriched.jsonl":
+        return "enrich"
+    return "enrich-" + out.stem.replace("_", "-")
+
+
+def short_summary(rows: Sequence[dict], products: dict[str, ProductInput], runs: Sequence[dict]) -> str:
+    stats = group_stats(rows, products)
+    lines = [
+        f"{len(rows)} products, {sum(len(row['needs_review']) for row in rows)} details marked needs_review "
+        f"on {sum(bool(row['needs_review']) for row in rows)} products",
+        "",
+        "| Group | Products | Unknown | Gemini unknown |",
+        "|---|---|---|---|",
+    ]
+    for group, entry in stats.items():
+        lines.append(
+            f"| {group} | {entry.products} | {entry.unknown}/{entry.details} "
+            f"({_percent(entry.unknown, entry.details)}) | {entry.gemini_unknown}/{entry.details} "
+            f"({_percent(entry.gemini_unknown, entry.details)}) |"
+        )
+    prompt = sum(run.get("prompt_tokens", 0) for run in runs)
+    output = sum(run.get("output_tokens", 0) for run in runs)
+    thinking = sum(run.get("thinking_tokens", 0) for run in runs)
+    cost = sum(run.get("cost_usd", 0) for run in runs)
+    lines += [
+        "",
+        f"Tokens: {prompt:,} input, {output:,} output, {thinking:,} thinking",
+        f"Estimated cost from the usage log: US${cost:.2f}",
+    ]
+    return "\n".join(lines)
+
+
 # ---------- Command line ----------
 
 
@@ -746,9 +890,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="send the photo as a gs:// link (default) or download and send its bytes",
     )
     parser.add_argument("--report", type=Path, help="write a readable report for the requested products here")
+    parser.add_argument("--mode", choices=("sync", "batch"), default="sync")
+    parser.add_argument("--job", help="batch job name; reused to reattach (default: enrich, or enrich-<output>)")
+    parser.add_argument("--bucket", default=os.environ.get("GCS_BUCKET") or "ecommai-511419-catalog")
+    parser.add_argument("--location", default=os.environ.get("GOOGLE_CLOUD_LOCATION") or "global")
+    parser.add_argument("--poll-seconds", type=float, default=60, help="how often to check a batch job")
+    parser.add_argument(
+        "--fallback-concurrency", type=int, default=2, help="sync retries for batch rows that came back unusable"
+    )
+    parser.add_argument("--no-fallback", action="store_true", help="list bad batch rows instead of retrying them live")
     args = parser.parse_args(argv)
-    if args.concurrency < 1 or args.attempts < 1:
-        parser.error("--concurrency and --attempts must be at least 1")
+    if args.concurrency < 1 or args.attempts < 1 or args.fallback_concurrency < 1 or args.poll_seconds < 0:
+        parser.error("--concurrency, --attempts and --fallback-concurrency must be at least 1")
     return args
 
 
@@ -774,7 +927,59 @@ def select(products: list[ProductInput], ids: list[str] | None) -> list[ProductI
     return [by_id[product_id] for product_id in dict.fromkeys(ids) if product_id in by_id]
 
 
-def main(argv: Sequence[str] | None = None, client: Client | None = None) -> int:
+def run_batch(
+    products: Sequence[ProductInput],
+    settings: Settings,
+    args: argparse.Namespace,
+    client: Client,
+    run_batch_job: Callable[..., dict] | None,
+) -> tuple[RunResult, RunResult | None]:
+    """Submit one batch job for the products not yet written, then sync-retry the ones that came back unusable."""
+    from data_prep.vertex_batch import ensure_bucket_access, run_job
+
+    done = read_done(args.out)
+    pending = [product for product in products if product.id not in done]
+    if args.limit is not None:
+        pending = pending[: args.limit]
+    batch_result = RunResult(requested=len(products), already_done=len(products) - len(pending))
+    if not pending:
+        return batch_result, None
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT") or ""
+    if not project and run_batch_job is None:
+        raise SystemExit("GOOGLE_CLOUD_PROJECT isn't set. Copy .env.example to .env and fill it in.")
+    lines = [enrich_line(product, settings) for product in pending]
+    job_name = args.job or default_job_name(args.out)
+    started = time.perf_counter()
+
+    def grant() -> str:
+        return ensure_bucket_access(args.bucket, project)
+
+    submit = run_batch_job or run_job
+    items = submit(
+        job_name, lines, model=settings.model, bucket=args.bucket, project=project, location=args.location,
+        poll_seconds=args.poll_seconds, grant_access=grant,
+    )
+    batch_result = apply_batch_results(pending, items, settings, args.out)
+    batch_result.requested = len(products)
+    batch_result.already_done = len(products) - len(pending)
+    batch_result.seconds = time.perf_counter() - started
+    sync_result = None
+    if batch_result.failed and not args.no_fallback:
+        retry = [product for product in pending if product.id in batch_result.failed]
+        print(f"{len(retry)} batch rows missing or invalid; retrying them live, {args.fallback_concurrency} at a time")
+        sync_settings = Settings(
+            model=settings.model, thinking_level=settings.thinking_level,
+            concurrency=args.fallback_concurrency, attempts=settings.attempts, photo_input="uri",
+        )
+        sync_result = run(retry, client, sync_settings, args.out)
+        for product_id in list(batch_result.failed):
+            if product_id not in sync_result.failed:
+                del batch_result.failed[product_id]
+        batch_result.failed.update(sync_result.failed)
+    return batch_result, sync_result
+
+
+def main(argv: Sequence[str] | None = None, client: Client | None = None, run_batch_job: Callable[..., dict] | None = None) -> int:
     load_dotenv()
     args = parse_args(argv)
     catalogue = load_products(args.selected, args.photos, args.details)
@@ -787,10 +992,29 @@ def main(argv: Sequence[str] | None = None, client: Client | None = None) -> int
         attempts=args.attempts,
         photo_input=args.photo_input,
     )
-    print(f"Enriching {len(requested):,} products into {args.out}")
-    result = run(requested, client or make_client(), settings, args.out, limit=args.limit)
-    runs = append_usage_log(args.out, settings, result, fresh)
-    print(summary(result, settings))
+    print(f"Enriching {len(requested):,} products into {args.out} ({args.mode})")
+    sync_result = None
+    if args.mode == "batch":
+        result, sync_result = run_batch(requested, settings, args, client or make_client(), run_batch_job)
+    else:
+        result = run(requested, client or make_client(), settings, args.out, limit=args.limit)
+    runs = append_usage_log(args.out, settings, result, fresh, batch=args.mode == "batch")
+    if sync_result is not None:
+        fallback = Settings(
+            model=settings.model, thinking_level=settings.thinking_level,
+            concurrency=args.fallback_concurrency, attempts=settings.attempts,
+        )
+        runs = append_usage_log(args.out, fallback, sync_result, fresh=False)
+        print(summary(sync_result, fallback))
+    print(summary(result, settings, batch=args.mode == "batch"))
+    if args.mode == "batch":
+        done = read_done(args.out)
+        by_id = {product.id: product for product in catalogue}
+        covered = [done[product.id] for product in requested if product.id in done]
+        text = short_summary(covered, by_id, runs)
+        print("\n" + text)
+        summary_path = args.out.with_suffix(".summary.md")
+        summary_path.write_text(text + "\n", encoding="utf-8")
 
     failed_path = args.out.with_name(args.out.stem + "_failed.txt")
     if result.failed:

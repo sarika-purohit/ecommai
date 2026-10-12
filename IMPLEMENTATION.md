@@ -229,9 +229,9 @@ The full dataset has a details file for each product (`styles/{id}.json`). Kaggl
 3. **Rules in the prompt:** don't guess things a photo can't show, such as how thick the fabric is or whether it's see-through. Use `unknown` for those.
 4. **When real details from step 1.3 exist,** use the real value (marked `source: catalogue`) and keep Gemini's value next to it. If they disagree, add the detail to the product's `needs_review` list.
 5. **Running it:**
- - run about 20 calls at a time;
- - retry on errors;
- - save results to `data/enriched.jsonl` as it goes, so it can resume;
+ - test with live calls (`--mode sync`) on the 20-product trial;
+ - run the full catalogue through **Vertex AI batch mode** (`--mode batch`). New projects get very little live Gemini capacity: live calls at scale hit "429 Resource exhausted". Batch has its own capacity and costs half as much;
+ - save results to `data/enriched.jsonl`, so it can resume;
  - never send the same product twice.
 
 **Test it**
@@ -240,10 +240,16 @@ The full dataset has a details file for each product (`styles/{id}.json`). Kaggl
 - **Compare with the real details from 1.3** where they exist, and work out the agreement percentage per detail.
 
 **Check before moving on**
-- [ ] All 3,000 products are enriched, with no failed rows left
+- [x] All 3,000 products are enriched, with no failed rows left
 - [ ] Spot check: at least 85% of visible details are right (our target)
 - [ ] Hidden details (fabric feel, sheerness) are `unknown` unless the real details say otherwise
-- [ ] Every disagreement with real details is listed for review
+- [x] Every disagreement with real details is listed for review
+
+**What we found:**
+- **Run:** all 2,999 products were enriched in one batch job, in about 6 minutes, for US$5.29 including the earlier live test calls.
+- **Trial agreement:** on the 20-product trial, Gemini agreed with the real labels 87% of the time, and the photo usually showed Gemini was right when they disagreed.
+- **Disagreements:** 814 details on 681 products are marked `needs_review`.
+- **Spot-check page:** https://storage.googleapis.com/ecommai-511419-catalog/spot_check/index.html (built by `python -m data_prep.spot_check build`). Score the downloaded marks with `python -m data_prep.spot_check score <files>`.
 
 ### 1.5 Add demo shop data
 
@@ -294,10 +300,16 @@ Our dataset has no stock, delivery, cash-on-delivery or return information, so w
 - Locally: run every planted trick review through Model Armor and note which ones it flags. In the trial it caught 5 of 8 obvious tricks and none of the gentle ones, so the careful check (step 2.5) must ignore whatever gets through.
 
 **Check before moving on**
-- [ ] Every product has 3–6 reviews
-- [ ] The planted problems list matches the actual reviews
-- [ ] Model Armor flags none of the normal reviews, and every trick it misses is listed for the step 2.5 test
-- [ ] The test answers (`planted` and `tricks`) stay in `eval/` and never reach Firestore
+- [x] Every product has 3–6 reviews
+- [x] The planted problems list matches the actual reviews
+- [x] Model Armor flags none of the normal reviews, and every trick it misses is listed for the step 2.5 test
+- [x] The test answers (`planted` and `tricks`) stay in `eval/` and never reach Firestore
+
+**What we found:**
+- **Reviews:** 13,384 reviews for 2,999 products, written by `gemini-3.5-flash-lite` for about US$1.70.
+- **Planted problems:** 452, listed in `eval/planted_problems.jsonl`.
+- **Trick reviews:** 63, listed in `eval/trick_reviews.jsonl`. Model Armor flagged 30 of the 41 obvious ones and none of the 22 gentle ones, and no normal review.
+- **Pace:** Model Armor rate-limits at 16 parallel calls. Re-run with `--workers 4` to finish any that fail.
 
 ### 1.7 Embeddings and loading into Firestore
 
@@ -317,9 +329,14 @@ Our dataset has no stock, delivery, cash-on-delivery or return information, so w
 - Locally: a test checks that a sample of Firestore documents matches `data/enriched.jsonl`.
 
 **Check before moving on**
-- [ ] All 3,000 products are in Firestore with embeddings
-- [ ] The 5 sanity searches return sensible results
-- [ ] Filtered vector search works and returns in under a second
+- [x] All 3,000 products are in Firestore with embeddings
+- [x] The 5 sanity searches return sensible results
+- [x] Filtered vector search works and returns in under a second
+
+**What we found:**
+- **Load:** all 2,999 products are in Firestore, and a read-back of 100 matched the inputs. Embeddings cost US$0.40.
+- **Speed:** searches take 60–250 ms.
+- **Search finds the right kind of product, but not the must-haves.** "Green dial watch with steel strap" returns watches, but only one has a green dial. "White sneakers with no logo" returns white shoes with logos. That gap is what the checking step (2.5) fixes, and it's a good before-and-after for the demo.
 
 ---
 
