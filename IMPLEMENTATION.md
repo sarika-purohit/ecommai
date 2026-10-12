@@ -191,9 +191,11 @@ The current photos are only 60×80 pixels. At that size Gemini can't see pockets
 - By eye: open 10 photos at each size. Pockets, collars and dial markings should be clearly visible in the `gemini/` size.
 
 **Check before moving on**
-- [ ] Every chosen product has three photo sizes in Cloud Storage
-- [ ] No photo is the old 60×80 size
+- [x] Every chosen product has three photo sizes in Cloud Storage
+- [x] No photo is the old 60×80 size
 - [x] The details we need to check are visible in the `gemini/` size
+
+**What we found:** one chosen product (39401, a pair of jeans) has no photo in the dataset, so we dropped it. The catalogue is 2,999 products. Originals are 1800×2400 or 1080×1440 pixels.
 
 ### 1.3 Read the real catalogue details (if they exist)
 
