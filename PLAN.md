@@ -530,25 +530,32 @@ The parts below are for whoever is writing the code. Everyone else can stop here
 
 ```json
 {
-  "category": "kurta",
+  "category": "Kurtas",
   "gender": "women",
   "must_haves": [
     { "id": "m1", "attribute": "fabric",          "rule": "is",      "value": "cotton" },
     { "id": "m2", "attribute": "pockets",         "rule": "present", "value": true },
     { "id": "m3", "attribute": "sleeve_length",   "rule": "is",      "value": "three-quarter" },
     { "id": "m4", "attribute": "sheerness",       "rule": "is_not",  "value": "see-through" },
-    { "id": "m5", "attribute": "print_intensity", "rule": "is_not",  "value": "loud" }
+    { "id": "m5", "attribute": "print_intensity", "rule": "is_not",  "value": "loud" },
+    { "id": "r1", "attribute": "cod",             "rule": "present", "value": true, "from_rule": true }
   ],
   "nice_to_haves": [ { "attribute": "usage", "value": "office" } ],
-  "rules_applied": [ "never polyester" ],
-  "budget": { "max_inr": 1200, "includes_delivery": true },
-  "deadline": { "date": "<YYYY-MM-DD>", "pincode": "411038" },
+  "rules_applied": [ "cash on delivery" ],
+  "budget_max_inr": 1200,
+  "deadline_date": "<YYYY-MM-DD>",
+  "pincode": "411038",
   "size": null,
-  "reference_image": null,
+  "reference_image_url": null,
   "language": "hinglish",
-  "missing": ["size"]
+  "missing": ["size"],
+  "question": "Which size do you usually wear?"
 }
 ```
+
+- **`category`** is the dataset's product type (`articleType`), for example `Kurtas` or `Watches`.
+- **`budget_max_inr`** includes delivery.
+- **`from_rule: true`** marks must-haves that come from the shopper's saved rules. They show as locked chips.
 
 ### B. One check result
 
@@ -574,18 +581,25 @@ The parts below are for whoever is writing the code. Everyone else can stop here
 
 ### C. Pydantic models (shape)
 
+The real code is in `agent/models.py`; this is the short version.
+
 ```python
 class MustHave(BaseModel):
     id: str
     attribute: str
     rule: Literal["is", "is_not", "present", "absent", "at_most", "at_least"]
     value: str | bool | float
+    from_rule: bool = False
+
+class NiceToHave(BaseModel):
+    attribute: str
+    value: str | bool | float
 
 class ShoppingBrief(BaseModel):
     category: str
-    gender: Literal["men", "women", "unisex"] | None
+    gender: Literal["men", "women", "boys", "girls", "unisex"] | None
     must_haves: list[MustHave]
-    nice_to_haves: list[dict]
+    nice_to_haves: list[NiceToHave]
     rules_applied: list[str]
     budget_max_inr: int | None
     deadline_date: date | None
@@ -594,6 +608,7 @@ class ShoppingBrief(BaseModel):
     reference_image_url: str | None
     language: str
     missing: list[str]
+    question: str | None
 
 class Evidence(BaseModel):
     type: Literal["image", "details", "reviews", "attribute"]
@@ -605,15 +620,16 @@ class Evidence(BaseModel):
 
 class Check(BaseModel):
     must_have_id: str
-    status: Literal["pass", "fail", "unclear"]
+    status: Literal["pass", "fail", "unclear"]   # a "pass" with no evidence becomes "unclear"
     confidence: float
-    evidence: Evidence
+    evidence: Evidence | None
 
 class Verification(BaseModel):
     product_id: str
     checks: list[Check]
-    all_pass: bool
     reason: str
+    all_pass: bool        # worked out from the checks
+    overall: Literal["pass", "fail", "unclear"]   # worked out from the checks
 ```
 
 ### D. Agent building blocks (ADK)
@@ -670,7 +686,8 @@ class Verification(BaseModel):
   "checked": 18,
   "passed": 4,
   "unclear": 4,
-  "rejected": { "no pockets": 6, "see-through": 2, "late delivery": 3 },
+  "rejected": { "no pockets": 6, "see-through": 2, "late delivery": 1 },
+  "duplicates": 1,
   "tradeoffs": []
 }
 ```
@@ -710,7 +727,7 @@ products/{productId}
 users/{userId}                         // userId = the shopper's Firebase sign-in ID
   name, email                          // from Google sign-in; never copied into logs
   pincode, language, rules [ MustHave ], sizes { <brand>: <size> }
-  taste { <articleType>: vector }      // average embedding of liked, saved and bought products
+  taste { <articleType>: { vector, count } }   // running average embedding of liked, saved and bought products
   likes [ ... ], dislikes [ ... ], watches [ ... ]
 
 sessions/{sessionId}

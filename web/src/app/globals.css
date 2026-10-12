@@ -1,0 +1,496 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f4f5fa;
+  --color-card: #ffffff;
+  --color-ink: #181d45;
+  --color-ink-soft: #4a5079;
+  --color-indigo: #2b3a9b;
+  --color-indigo-deep: #1f2a78;
+  --color-wash: #e3e7f6;
+  --color-line: #d6dbec;
+  --color-line-strong: #7d84ab;
+  --color-marigold: #f2a93b;
+  --color-marigold-wash: #fdf1d8;
+  --color-pass: #157a3a;
+  --color-pass-wash: #ddf2e3;
+  --color-fail: #b4232b;
+  --color-fail-wash: #fbe3e3;
+  --color-unclear: #5e6375;
+  --color-unclear-wash: #e9eaef;
+}
+
+@theme inline {
+  --font-display: var(--font-anek), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-mukta), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    background: var(--color-paper);
+  }
+
+  body {
+    min-height: 100dvh;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 1.125rem;
+    line-height: 1.5;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-indigo);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: var(--color-marigold-wash);
+  }
+
+  button,
+  [role="button"],
+  label[for] {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+/* Returning shoppers skip the sign-in screen while their session is restored. */
+html[data-returning] [data-signin-screen] {
+  visibility: hidden;
+}
+
+@layer components {
+  .shell {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 34rem;
+    padding-inline: 1.25rem;
+  }
+
+  .display {
+    font-family: var(--font-display);
+    font-stretch: 85%;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.04;
+  }
+
+  .eyebrow {
+    font-family: var(--font-display);
+    font-stretch: 100%;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+  }
+
+  .stitch {
+    border: 0;
+    border-top: 2px dashed var(--color-line);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    min-height: 3.5rem;
+    padding: 0.5rem 1.25rem;
+    border-radius: 1rem;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.1;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      transform 100ms ease;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+  }
+
+  .btn-primary {
+    background: var(--color-indigo);
+    color: #ffffff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-indigo-deep);
+  }
+
+  .btn-secondary {
+    background: var(--color-card);
+    color: var(--color-ink);
+    border: 2px solid var(--color-line-strong);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    border-color: var(--color-ink);
+  }
+
+  .btn-small {
+    min-height: 2.75rem;
+    padding: 0.25rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 1.0625rem;
+  }
+
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    color: var(--color-indigo);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+
+  .field {
+    width: 100%;
+    min-height: 3.25rem;
+    padding: 0.625rem 1rem;
+    border: 2px solid var(--color-line-strong);
+    border-radius: 0.875rem;
+    background: var(--color-card);
+    font-size: 1.125rem;
+  }
+
+  .field:focus-visible {
+    border-color: var(--color-indigo);
+    outline-offset: 1px;
+  }
+
+  .field[aria-invalid="true"] {
+    border-color: var(--color-fail);
+  }
+
+  .field-error {
+    color: var(--color-fail);
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  /* The swing tag: the shape every must-have takes. */
+  .tag {
+    --tag-bg: var(--color-wash);
+    --tag-fg: var(--color-ink);
+    --tag-ring: color-mix(in oklab, var(--tag-fg) 28%, transparent);
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: stretch;
+    max-width: 100%;
+    min-height: 3rem;
+    padding-left: 1.875rem;
+    color: var(--tag-fg);
+  }
+
+  .tag::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: 0.75rem;
+    background: var(--tag-bg);
+    clip-path: polygon(
+      0.95rem 0,
+      100% 0,
+      100% 100%,
+      0.95rem 100%,
+      0 calc(50% + 0.55rem),
+      0 calc(50% - 0.55rem)
+    );
+  }
+
+  .tag::after {
+    content: "";
+    position: absolute;
+    left: 0.8rem;
+    top: 50%;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-top: -0.25rem;
+    border-radius: 999px;
+    background: var(--color-paper);
+    box-shadow: 0 0 0 2px var(--tag-ring);
+  }
+
+  .tag-text {
+    display: inline-flex;
+    align-items: center;
+    min-height: 3rem;
+    padding: 0.375rem 0.875rem 0.375rem 0;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: left;
+  }
+
+  .tag-action {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    min-height: 3rem;
+    border-left: 1px solid var(--tag-ring);
+    border-radius: 0 0.75rem 0.75rem 0;
+    color: inherit;
+  }
+
+  .tag button:focus-visible {
+    outline-offset: -4px;
+    border-radius: 0.625rem;
+  }
+
+  .tag-action:hover {
+    background: color-mix(in oklab, var(--tag-fg) 8%, transparent);
+  }
+
+  .tag[data-tone="rule"] {
+    --tag-bg: var(--color-ink);
+    --tag-fg: #ffffff;
+  }
+
+  .tag[data-tone="rule"] :focus-visible {
+    outline-color: var(--color-marigold);
+  }
+
+  .tag[data-tone="off"] {
+    --tag-bg: var(--color-unclear-wash);
+    --tag-fg: var(--color-unclear);
+  }
+
+  .tag[data-tone="off"] .tag-text {
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+  }
+
+  .tag[data-icon]::after {
+    display: none;
+  }
+
+  .tag[data-tone="pass"] {
+    --tag-bg: var(--color-pass-wash);
+    --tag-fg: var(--color-pass);
+  }
+
+  .tag[data-tone="fail"] {
+    --tag-bg: var(--color-fail-wash);
+    --tag-fg: var(--color-fail);
+  }
+
+  .tag[data-tone="unclear"] {
+    --tag-bg: var(--color-unclear-wash);
+    --tag-fg: var(--color-unclear);
+  }
+
+  .tag-icon {
+    position: absolute;
+    left: 0.5rem;
+    top: 50%;
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-top: -0.5625rem;
+  }
+
+  .add-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 3rem;
+    padding: 0.375rem 1rem;
+    border: 2px dashed var(--color-line-strong);
+    border-radius: 0.75rem;
+    color: var(--color-indigo);
+    font-size: 1.0625rem;
+    font-weight: 600;
+  }
+
+  .add-tag:hover {
+    border-color: var(--color-indigo);
+    background: var(--color-card);
+  }
+
+  .panel {
+    border-radius: 1.25rem;
+    background: var(--color-card);
+    box-shadow:
+      0 1px 0 var(--color-line),
+      0 0 0 1px var(--color-line);
+  }
+
+  .segmented {
+    position: relative;
+    display: grid;
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 0.875rem;
+    background: var(--color-wash);
+  }
+
+  .segmented label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.625rem;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .segmented input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .segmented input:checked + label {
+    background: var(--color-card);
+    color: var(--color-indigo);
+    box-shadow: 0 0 0 2px var(--color-indigo);
+  }
+
+  .segmented input:focus-visible + label {
+    outline: 3px solid var(--color-indigo);
+    outline-offset: 2px;
+  }
+
+  .switch-button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 4rem;
+    min-height: 3rem;
+  }
+
+  .switch {
+    position: relative;
+    width: 3.25rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--color-line-strong);
+    transition: background-color 150ms ease;
+  }
+
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 0.25rem;
+    left: 0.25rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: #ffffff;
+    transition: transform 150ms ease;
+  }
+
+  [aria-checked="true"] > .switch {
+    background: var(--color-marigold);
+  }
+
+  [aria-checked="true"] > .switch::after {
+    transform: translateX(1.25rem);
+  }
+
+  .stamp {
+    animation: stamp 420ms cubic-bezier(0.2, 0.9, 0.3, 1.35) both;
+    animation-delay: calc(var(--order, 0) * 220ms + 500ms);
+  }
+
+  .slot {
+    background: var(--color-wash);
+    color: var(--color-indigo);
+    transition:
+      opacity 400ms ease,
+      background-color 300ms ease,
+      transform 300ms ease;
+  }
+
+  .slot[data-state="pass"] {
+    background: var(--color-pass-wash);
+    color: var(--color-pass);
+  }
+
+  .slot[data-state="fail"] {
+    background: var(--color-fail-wash);
+    color: var(--color-fail);
+  }
+
+  .slot[data-state="unclear"] {
+    background: var(--color-unclear-wash);
+    color: var(--color-unclear);
+  }
+
+  .capitalize-first::first-letter {
+    text-transform: uppercase;
+  }
+
+  .slot[data-state="checking"] .slot-dot {
+    animation: pulse 900ms ease-in-out infinite alternate;
+  }
+
+  .slot[data-state="fail"] {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes stamp {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-14deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

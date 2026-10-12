@@ -1,0 +1,212 @@
+{
+  "notification": {},
+  "meta": {
+    "code": 200,
+    "requestId": "d78f889a-48ee-4fd0-bfd8-4bdc7cb31bec"
+  },
+  "data": {
+    "id": 37290,
+    "price": 3995,
+    "discountedPrice": 3995,
+    "styleType": "P",
+    "productTypeId": 361,
+    "articleNumber": "A414",
+    "visualTag": "",
+    "productDisplayName": "Casio Enticer Men Silver Analogue Watches MTP-1291D-1A2VDF(A414)",
+    "variantName": "CASIO",
+    "myntraRating": 1,
+    "catalogAddDate": 1451662608,
+    "brandName": "CASIO",
+    "ageGroup": "Adults-Men",
+    "gender": "Men",
+    "baseColour": "Black",
+    "colour1": "NA",
+    "colour2": "NA",
+    "fashionType": "Core",
+    "season": "Winter",
+    "year": "2016",
+    "usage": "Casual",
+    "vat": 14.5,
+    "displayCategories": "Accessories",
+    "weight": "0",
+    "navigationId": 1257,
+    "landingPageUrl": "Watches/CASIO/Casio-Enticer-Men-Silver-Analogue-Watches-MTP-1291D-1A2VDFA414/37290/buy",
+    "articleAttributes": {
+      "Strap Material": "Stainless Steel",
+      "Business Unit": "NA",
+      "Power Source": "Battery",
+      "Occasion": "Casual",
+      "Multipack Set": "Single",
+      "Strap Colour": "Silver Toned",
+      "Dial Pattern": "Solid",
+      "Number of Components": "1",
+      "Dial Colour": "Black",
+      "Segment": "NA",
+      "Dial Shape": "Round",
+      "Features": "Reset Time",
+      "Dial Material": "Metal",
+      "Strap Closure": "Foldover",
+      "Water Resistance": "50 m",
+      "Movement": "Mechanical",
+      "Warranty": "2 years",
+      "Strap Style": "Bracelet Style",
+      "Features 3": "NA",
+      "Make": "Non-Swiss Made",
+      "Type": "Hybrid",
+      "Scratch Resistance": "No",
+      "Brick": "NA",
+      "Add-Ons": "NA",
+      "Features 2": "NA",
+      "Family": "NA",
+      "Class": "NA",
+      "Processing Time": "NA",
+      "Display": "Analogue"
+    },
+    "crossLinks": [
+      {
+        "key": "More Watches by CASIO",
+        "value": "watches?f=brand:CASIO::gender:men"
+      }
+    ],
+    "brandUserProfile": {
+      "uidx": "e9bf07b0.11ce.4f56.84fa.6444c5a0ceb7mK4JoMjsVZ",
+      "bio": "Moving Time Forward",
+      "name": "Casio India",
+      "image": "http://assets.myntassets.com/assets/images/2015/12/11/11449838868433-112178-1b76lib.jpg",
+      "publicProfileId": "Casio.India",
+      "tagsMap": "{\"roles\":[],\"labels\":[],\"myntraVerified\":true,\"invited\":true,\"brandUrl\":\"/casio\"}"
+    },
+    "codEnabled": true,
+    "styleImages": {
+      "default": {
+        "imageURL": "http://assets.myntassets.com/v1/image/style/properties/37290/Casio-Men-Black-Dial-Watch_1_65398210d25c51754e8a36b3200c3bb9.jpg",
+        "imageType": "default"
+      },
+      "front": {
+        "imageURL": "http://assets.myntassets.com/v1/image/style/properties/37290/Casio-Men-Black-Dial-Watch_2_098f75ff5cfb1d8b026635ad5746c73d.jpg",
+        "imageType": "front"
+      }
+    },
+    "lookGoodAlbum": {},
+    "style360Images": {},
+    "masterCategory": {
+      "id": 1,
+      "typeName": "Accessories",
+      "active": true,
+      "socialSharingEnabled": true,
+      "isReturnable": true,
+      "isExchangeable": true,
+      "pickupEnabled": true,
+      "isTryAndBuyEnabled": true
+    },
+    "subCategory": {
+      "id": 27,
+      "typeName": "Watches",
+      "active": true,
+      "socialSharingEnabled": true,
+      "isReturnable": true,
+      "isExchangeable": true,
+      "pickupEnabled": true,
+      "isTryAndBuyEnabled": true
+    },
+    "articleType": {
+      "id": 66,
+      "typeName": "Watches",
+      "active": true,
+      "socialSharingEnabled": true,
+      "isReturnable": true,
+      "isExchangeable": true,
+      "pickupEnabled": true,
+      "isTryAndBuyEnabled": true,
+      "isMyntsEnabled": true,
+      "serviceabilityDisclaimer": {
+        "title": "",
+        "desc": ""
+      }
+    },
+    "isEMIEnabled": true,
+    "otherFlags": [
+      {
+        "dataType": "BOOLEAN",
+        "name": "isFragile",
+        "value": "false"
+      },
+      {
+        "dataType": "BOOLEAN",
+        "name": "isTryAndBuyEnabled",
+        "value": "true"
+      },
+      {
+        "dataType": "BOOLEAN",
+        "name": "isHazmat",
+        "value": "false"
+      }
+    ],
+    "articleDisplayAttr": {
+      "id": 66,
+      "core": {
+        "order": "0",
+        "display": "2",
+        "pdtDetail": "1",
+        "pdtDeliveryOptions": "2",
+        "pdtSimilar": "2",
+        "pdtLike": "2"
+      },
+      "social": {
+        "order": "1",
+        "display": "2",
+        "userLikes": "1",
+        "styleNotes": "2",
+        "crossSell": "1"
+      },
+      "explore": {
+        "display": "2",
+        "crosslink": "1",
+        "similar": "1",
+        "order": "2"
+      }
+    },
+    "productDescriptors": {
+      "size_fit_desc": {
+        "descriptorType": "size_fit_desc",
+        "value": "Dial width: 45 mm"
+      },
+      "description": {
+        "descriptorType": "description",
+        "value": "<span>Case style: Analogue watch with a circular case<br>Dial style: Black dial, has hour and minute hands, silver-toned seconds hand, black and white markings<br>Features: Screw to reset the time, 3-faced chronograph displays<br>Strap style: Stainless steel bracelet-style strap secured with a fold-over clasp<br>Water resistant up to 50 m<br>Comes in a signature CASIO case<br>Warranty: 2 years</span><br>Warranty provided by Brand Owner / Manufacturer<br />To register this product online for warranty, the customer has to visit https://register.casio.in. Post login, please select the 'Online Store' option and follow the steps for registration."
+      },
+      "style_note": {
+        "descriptorType": "style_note",
+        "value": "This stylish watch is a sure way to up your style quotient by a couple of notches. Wear it with a casual attire to complete the ensemble."
+      }
+    },
+    "styleOptions": [
+      {
+        "id": 150635,
+        "name": "Size",
+        "value": "ONESIZE",
+        "unifiedSize": "Onesize",
+        "unifiedSizeValue": "Onesize",
+        "unifiedSizeScale": "",
+        "allSize": "Onesize,ONESIZE",
+        "skuId": 157708,
+        "skuAvailabilityDetailMap": {
+          "1": {
+            "sellerid": 48,
+            "storeid": 2297,
+            "sellername": "FashionTech",
+            "availableCount": 0,
+            "availableInWarehouses": "",
+            "leadTime": 2,
+            "supplyType": "JUST_IN_TIME",
+            "sellableInventoryCount": 0
+          }
+        },
+        "warehouseIdToItemCountMap": {},
+        "inventoryCount": 0,
+        "available": false,
+        "active": true
+      }
+    ]
+  }
+}

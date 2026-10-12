@@ -1,0 +1,25 @@
+# Secrets
+.env
+.env*.local
+kaggle.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Tool caches kept inside the project
+.uv-cache/
+.npm-cache/
+
+# Files created while preparing data
+data/
+downloads/
+
+# Web app
+web/node_modules/
+web/.next/
+web/out/
+
+.DS_Store
