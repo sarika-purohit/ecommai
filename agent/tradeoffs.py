@@ -51,7 +51,7 @@ def _relax_deadline(brief: ShoppingBrief, candidates: list[Candidate], now: int)
 def _relax_budget(brief: ShoppingBrief, candidates: list[Candidate], now: int) -> Tradeoff | None:
     if brief.budget_max_inr is None:
         return None
-    raised = _raised_budget(brief.budget_max_inr)
+    raised = raised_budget(brief.budget_max_inr)
     matches = _matches(brief.model_copy(update={"budget_max_inr": raised}), candidates)
     return Tradeoff(relax="budget", to=raised, matches=matches) if matches > now else None
 
@@ -66,7 +66,7 @@ def _drop_must_haves(brief: ShoppingBrief, candidates: list[Candidate], now: int
     return options
 
 
-def _raised_budget(budget: int) -> int:
+def raised_budget(budget: int) -> int:
     """The budget plus BUDGET_RAISE_PERCENT, rounded up to the next BUDGET_ROUND_TO rupees."""
     hundredths = budget * (100 + BUDGET_RAISE_PERCENT)
     step = 100 * BUDGET_ROUND_TO

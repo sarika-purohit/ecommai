@@ -770,7 +770,7 @@ ecommai/
     app.py                # FastAPI endpoints
     auth.py               # checks the Google sign-in token
     workflow.py           # the six steps, in order
-    brief.py  rules.py  retrieve.py  verify.py  rank.py  tradeoffs.py
+    brief.py  rules.py  retrieve.py  quick_check.py  verify.py  rank.py  tradeoffs.py
     delivery.py  learn.py  seen_it.py  watch.py  share.py  insights.py
     agent.py              # the same steps as ADK tools (root_agent), for adk web, adk eval, MCP and A2A
     mcp_server.py         # tools for other AI apps
