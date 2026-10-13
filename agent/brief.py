@@ -49,6 +49,7 @@ MAX_REQUEST_CHARS = 2000
 PRICE_INPUT = 0.75
 PRICE_CACHED_INPUT = 0.075
 PRICE_OUTPUT = 3.75
+# 499 (a call that ran past REQUEST_TIMEOUT_MS) isn't retried here: agent/workflow.py falls back to Flash-Lite at once.
 RETRY_CODES = {408, 429, 500, 502, 503, 504}
 
 SIZED_GROUPS = ("tops", "bottoms", "shoes")

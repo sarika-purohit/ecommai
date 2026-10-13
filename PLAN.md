@@ -658,10 +658,13 @@ class Verification(BaseModel):
 
 | Endpoint | Input | Output |
 |---|---|---|
-| `POST /api/brief` | `{ text?, audio_base64?, image_url?, pincode, language }` | `{ session_id, brief, question? }` |
-| `POST /api/brief/update` | `{ session_id, change }` | `{ brief }` |
-| `POST /api/search` | `{ session_id }` | Stream: `candidates {count}` → `checking {product_id}` → `verified {product_id, status, ticks[]}` → `done {summary, tradeoffs?}`. If something goes wrong: `error {message, retryable}` |
-| `GET /api/products/{id}` | — | Product with all evidence |
+| `GET /health` (and `/healthz`) | — | `{ ok: true }`. Cloud Run reserves some paths ending in "z", so health checks use `/health` |
+| `POST /api/brief` | `{ text?, image_url?, image_base64?, image_mime_type?, pincode, language }` | `{ session_id, brief, question }`. An unknown pincode is a 400 with a friendly message |
+| `POST /api/brief/update` | `{ session_id, change }`. `change` is one of: `text`, `answer`, `add_must_have` (these three go to Gemini), or `edit_must_have`, `remove_must_have`, `set_rule` (switch a saved rule off for this search), `remove_nice_to_have`, `set_budget`, `set_deadline`, `set_pincode`, `set_size` (applied in code) | `{ brief }` |
+| `POST /api/search` | `{ session_id }` | Stream, see below |
+| `GET /api/products/{id}?session_id=` | — | The product (no embedding) plus the tick-list for that search's checklist, and `sizes_in_stock` |
+| `GET /api/me`, `PUT /api/me`, `DELETE /api/me` | `{ pincode?, language? }` | `{ name, email, pincode, language, rules, has_taste }`. DELETE removes the shopper, their searches and uploads |
+| `DELETE /api/me/taste` | — | `{ ok }`. Clears the learned style |
 | `POST /api/seen/start` | `{ text \| audio }` | `{ session_id, questions[] }` |
 | `POST /api/seen/variants` | `{ session_id, answers, feedback? }` | `{ images[4], varied_attributes[] }` |
 | `POST /api/seen/choose` | `{ session_id, image_id, change_note? }` | `{ reference_image_url }` |
@@ -678,8 +681,19 @@ class Verification(BaseModel):
 - **App endpoints** (`/api/*`) need the shopper's Firebase sign-in token in the `Authorization: Bearer <token>` header; the agent checks it on every request. The one exception is `GET /api/share/{id}`.
 - **`/mcp` and `/a2a`** use their own OAuth sign-in.
 - **The browser calls the Cloud Run agent directly,** not through Firebase, so streaming isn't held up. The agent only accepts requests from our app's web address (CORS).
+- **For local testing, `AUTH_MODE=dev`** lets requests without a token act as a demo user. The API refuses to start in dev mode on Cloud Run.
 
-**Example `done` event:**
+**The search stream.** Each event is `event: <type>` plus `data: <json>`:
+- `candidates { count, dropped }`: after the search and the quick check.
+- `checking { product_id, title, thumb }`: one for each product sent to the careful check, all before the first `verified`.
+- `verified { product_id, status, ticks[] }`: as each check finishes. Saved results come first. A product still being checked after 8 s arrives as `unclear`.
+- `done { checked, passed, unclear, rejected, duplicates, tradeoffs, matches[], almost[], not_checkable[] }`. Each match is a result card: the ranked result (title, total price, delivery date, ticks, reason) plus brand, photo links, price, delivery fee, COD, returns, rating, `demo_data` and sizes in stock.
+- `error { message, retryable }`.
+- A `: ping` comment line goes out every 15 s to keep the connection open.
+
+**Products for "what to give up":** the careful check also takes a few products that miss exactly one must-have. They keep that fail, so they can never be matches, but "what to give up" can then count what dropping that must-have would give.
+
+**Example `done` event** (summary fields only):
 
 ```json
 {
@@ -734,6 +748,9 @@ users/{userId}                         // userId = the shopper's Firebase sign-i
 
 sessions/{sessionId}
   userId, brief, history, results, feedback
+  rules, disabled_rules                // the saved rules at the time, and the ones switched off for this search
+  query_text, photo, photo_vector      // the shopper's words and photo (photo is a private upload, deleted after the search)
+  timings                              // milliseconds per step, for speed checks
 
 checks/{productId}__{attribute}__{rule}__{value}   // saved careful-check results
   product_id, attribute, rule, value
@@ -744,6 +761,8 @@ checks/{productId}__{attribute}__{rule}__{value}   // saved careful-check result
 shares/{shareId}
   product_ids, brief, created_at       // opens without sign-in
 ```
+
+**Cloud Storage:** the catalogue bucket (`<project>-catalog`) is public, for product photos. Shoppers' uploads go to a separate private bucket (`<project>-uploads`). That bucket blocks public access and deletes files after 1 day; the agent deletes each upload as soon as its search has used it.
 
 **BigQuery table `ecommai.searches`** (one row per search, for the seller insights page): brief, category, candidate count, passed count, rejection counts by reason, trade-offs offered, pincode, language. No name, email or user ID.
 

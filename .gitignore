@@ -5,6 +5,7 @@ kaggle.json
 
 # Python
 .venv/
+.adk/
 __pycache__/
 *.pyc
 .pytest_cache/
