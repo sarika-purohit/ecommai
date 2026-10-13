@@ -207,6 +207,12 @@ class Product(BaseModel):
     images: Images | None = None
     embedding: list[float] | None = Field(default=None, repr=False)
     demo_data: bool = True
+    source: Literal["catalog", "shopify"] = Field(
+        default="catalog", description="catalog = our demo catalogue; shopify = a live store found through UCP"
+    )
+    store: str | None = Field(default=None, description="The live store's name")
+    product_url: str | None = Field(default=None, description="The product's page on the live store")
+    checkout_url: str | None = Field(default=None, description="The live store's own checkout for this product")
 
     @field_validator("gender", mode="before")
     @classmethod

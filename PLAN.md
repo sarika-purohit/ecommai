@@ -744,6 +744,8 @@ products/{productId}
   images { original, gemini, thumb }   // links to the three photo sizes
   embedding                            // Gemini Embedding 2, 768 numbers, photo + text
   demo_data: true
+  source                               // "catalog" here; live products from stores ("shopify") are never stored as products
+  store, product_url, checkout_url     // only on live products: the store's name and its own pages
 
 users/{userId}                         // userId = the shopper's Firebase sign-in ID
   name, email                          // from Google sign-in; never copied into logs

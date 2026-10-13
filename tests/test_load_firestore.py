@@ -34,7 +34,7 @@ DIMENSIONS = 768
 APPENDIX_F_FIELDS = {
     "id", "title", "brand", "gender", "masterCategory", "subCategory", "articleType", "baseColour", "usage", "group",
     "description", "attributes", "catalogue_details", "needs_review", "price", "sizes", "warehouse", "delivery_fee",
-    "cod", "returns", "reviews", "rating_avg", "rating_count", "images", "embedding", "demo_data",
+    "cod", "returns", "reviews", "rating_avg", "rating_count", "images", "embedding", "demo_data", "source",
 }
 ADDED_FIELDS = {"in_stock_sizes"}
 
