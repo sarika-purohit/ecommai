@@ -82,10 +82,6 @@ TOPIC_WORDS = {
     "sheerness": re.compile(
         r"sheer|see[- ]?through|transparent|opaque|lined|lining|thick|aar[- ]?paar|dikh(ta|ti|te)|पारदर्शी|झीना", re.I
     ),
-    "fabric": re.compile(
-        r"cotton|linen|rayon|viscose|polyester|poly|silk|denim|blend|wool|khadi|modal|nylon|lycra|spandex|elastane"
-        r"|fabric|material|kapda", re.I
-    ),
     "size_fit": re.compile(r"size|sizing|fit|small|large|big|tight|loose|snug|true to|chhot|bad[ai]\b|tang|dheel|baith", re.I),
     "durability": re.compile(
         r"durab|\blast(s|ed|ing)?\b|month|year|week|still|held up|holding up|sturdy|strong|tough|solid|broke|break"
@@ -94,6 +90,81 @@ TOPIC_WORDS = {
     "colour_fastness": re.compile(r"fade|fading|bleed|bled|colou?r (ran|run|came off)|wash|rang|dhul|dhone", re.I),
     "colour_match": re.compile(r"colou?r|shade|photo|picture|image|\bpic|as shown|same as|exact|rang|dikh", re.I),
 }
+# A fabric pass must name the fabric: "Fabric is light and comfortable" says nothing about cotton.
+FABRIC_NAMES = {
+    "cotton": r"cotton|khadi|kapas|\bsuti\b|सूती",
+    "linen": r"linen|flax",
+    "rayon": r"rayon|viscose|modal",
+    "polyester": r"polyester|\bpoly\b|terylene|terry ?cot",
+    "silk": r"silk|resham|रेशम",
+    "blend": r"blend|poly[- ]?cotton|cotton[- ]?poly|\d+\s*%.*\d+\s*%",
+    "denim": r"denim",
+    "wool": r"wool|woollen|ooni",
+}
+
+
+@dataclass(frozen=True)
+class Denial:
+    """Review words saying the product has `value`; `unless` near the words means they're about something else."""
+    value: str
+    words: re.Pattern
+    unless: re.Pattern | None = None
+
+
+# A pass that one of these values would fail is not accepted while such a review stands unanswered.
+# English, Hinglish and Hindi in Latin script; matched on lower-cased review text.
+DENIALS: dict[str, list[Denial]] = {
+    "pockets": [Denial("none", re.compile(
+        r"fake\s+pockets?|(pockets?|jeb\w*)\s+((?!not\b|never\b)\w+\s+){0,3}(stitched|sewn|sealed|for show|decorative"
+        r"|fake|not real)|stitched\s+(shut\s+)?pockets?|\bno\s+(real\s+|actual\s+|usable\s+|working\s+)?pockets?"
+        r"|without\s+pockets?|(pockets?|jeb\w*)\s+(\w+\s+)?(nahi|nahin|nhi)\b|(koi|ek bhi)\s+(pocket|jeb)\w*\s+nahi"
+    ))],
+    "sheerness": [Denial("see-through", re.compile(
+        r"see[- ]?through|transparent|\bsheer\b|aar[- ]?paar"
+        r"|(inner\w*|undergarments?|bra|andar\s+ka(\s+sab)?)\s+(\w+\s+){0,2}(shows?|showing|visible|dikh\w*)"
+    ))],
+    "size_fit": [
+        Denial("runs small", re.compile(
+            r"runs?\s+(a\s+(little|bit)\s+|very\s+|too\s+)?small|too\s+(small|tight|short)|(one|a|ek)\s+size\s+(bigger|up|bada)"
+            r"|\bsize\s+up\b|chhot[aie]\s+(hai|hain|tha|thi|nikl\w*|pad\w*|aay\w*|lag\w*)|\btang\s+(hai|tha|thi)"
+        ), re.compile(r"\bdial\b|\bface\b|to be safe|just in case|looks?\s+(\w+\s+){0,2}too\s+(big|small)")),
+        Denial("runs large", re.compile(
+            r"runs?\s+(a\s+(little|bit)\s+|very\s+|too\s+)?(large|big)|too\s+(big|large|loose)"
+            r"|(one|a|ek)\s+size\s+(smaller|down)|\bsize\s+down\b|\b(bad[ai]|dheel[ai])\s+(hai|tha|thi|nikl\w*|lag\w*)"
+        ), re.compile(r"\bdial\b|\bface\b|to be safe|just in case|looks?\s+(\w+\s+){0,2}too\s+(big|small)")),
+    ],
+    "colour_match": [Denial("different", re.compile(
+        r"colou?r\s+(is\s+|was\s+)?(very\s+|totally\s+|completely\s+|slightly\s+|a\s+bit\s+)?different"
+        r"|(darker|lighter|duller|brighter)\s+than\s+(in\s+)?(the\s+)?(photo|picture|image|pic|shown)"
+        r"|(different|another)\s+(colou?r|shade)\s+(than|from)|colou?r\s+(\w+\s+){0,2}(not|n't)\s+match"
+        r"|(rang|colou?r|shade)\s+(\w+\s+){0,2}alag"
+        r"|(rang|colou?r|shade)\s+(\w+\s+){0,2}photo\s+(se|jaisa|jaisi)\s+(\w+\s+)?(alag|nahi)"
+    ))],
+    "colour_fastness": [Denial("fades", re.compile(
+        r"\bfad(e|es|ed|ing)\b(?!\s+(look|wash|effect|design|style))|\bbl(ed|eed|eeds|eeding)\b"
+        r"|colou?r\s+(ran|runs|came off|came out|nikal\w*|utar\w*)|\brang\s+(\w+\s+)?(utar|nikal|chhod)\w*"
+    ), re.compile(r"thigh|whisker|distress|\bknees?\b"))],
+    "durability": [Denial("poor", re.compile(
+        r"\bbroke\b|\bbroken\b|\btore\b|\btorn\b|\bripped\b|(came|coming|comes)\s+(off|loose|apart|out)"
+        r"|fell\s+(off|apart)|\bpeel(ed|ing|s)?\b|gave\s+way|got\s+stuck|stopped\s+working|\btoot(a|i|e|\s+gay\w*)\b"
+        r"|\btut\s+gay\w*|phat\s+gay\w*|kharab\s+ho\s+gay\w*|band\s+ho\s+gay\w*"
+    ), re.compile(r"packag|parcel|\bbox\b|courier|deliver|carton|\btags?\b|\bseal|plastic|outer|wrapp|\bcover\b|\bmood\b"))],
+    "logo_visible": [
+        Denial("subtle", re.compile(
+            r"(has|have|with|there is|there's)\s+(a\s+|the\s+)?(small\s+|tiny\s+|visible\s+)?(brand\s+)?logo"
+            r"|logo\s+(is\s+)?(visible|printed|there|hai|dikh\w*)"
+        )),
+        Denial("prominent", re.compile(r"(big|large|huge|prominent)\s+(brand\s+)?logo")),
+    ],
+    "polarised": [Denial("no", re.compile(
+        r"not\s+(really\s+|actually\s+)?polari[sz]ed|no\s+polari[sz]ation|polari[sz]ed\s+nahi"
+        r"|(n't|not)\s+(really\s+)?(cut|reduce|block)\s+(the\s+|any\s+)?glare|glare\s+(cut\s+)?(hi\s+)?(nahi|nhi)\b"
+        r"|failed\s+the\s+(phone[- ]?)?screen\s+test"
+    ))],
+}
+NEGATED_BEFORE = re.compile(r"(\bnot|\bno|\bnothing|\bnever|\bhardly|\bwithout|n['’]t)\s+([a-z]+\s+){0,2}$")
+NEGATED_AFTER = re.compile(r"^\s+([a-z]+\s+)?(nahi|nahin|nhi)\b")
+QUOTE_LIMIT = 140
 # Off only for the evaluation that measures what Gemini does with Model Armor's flags alone.
 SCREEN_INSTRUCTIONS = True
 
@@ -348,6 +419,8 @@ class Decided:
     raw_status: Status | None = None
     notes: tuple[str, ...] = ()
     model: str = ""
+    agree_reviews: tuple[int, ...] = ()
+    disagree_reviews: tuple[int, ...] = ()
 
 
 def parse_answer(text: str | None, must_haves: Sequence[MustHave]) -> dict[str, AnswerCheck]:
@@ -409,6 +482,58 @@ def saved_verdict(must_have: MustHave, value: str | bool | float) -> Status | No
     return None
 
 
+def fabric_named(must_have: MustHave, quote: str) -> bool:
+    """Whether a quote names the fabric a fabric pass needs: the wanted one, or for "not X" any other fabric."""
+    value = value_text(must_have.value).casefold()
+    if must_have.rule == "is":
+        names = [FABRIC_NAMES.get(value, re.escape(value))]
+    else:
+        names = [pattern for name, pattern in FABRIC_NAMES.items() if name != value]
+    return any(re.search(pattern, quote, re.I) for pattern in names)
+
+
+def denial_in(denial: Denial, text: str) -> str | None:
+    """The sentence where the denial's words appear, not negated ("not see-through", "transparent nahi")."""
+    lowered = text.casefold()
+    for match in denial.words.finditer(lowered):
+        if NEGATED_BEFORE.search(lowered[max(0, match.start() - 40) : match.start()]):
+            continue
+        if NEGATED_AFTER.search(lowered[match.end() : match.end() + 25]):
+            continue
+        if denial.unless and denial.unless.search(lowered[max(0, match.start() - 40) : match.end() + 20]):
+            continue
+        start = max(text.rfind(mark, 0, match.start()) for mark in ".!?") + 1
+        ends = [end for mark in ".!?" if (end := text.find(mark, match.end())) != -1]
+        sentence = text[start : min(ends) + 1 if ends else len(text)].strip()
+        return sentence if len(sentence) <= QUOTE_LIMIT else sentence[: QUOTE_LIMIT - 1].rstrip() + "…"
+    return None
+
+
+def denying_reviews(must_have: MustHave, reviews: Sequence[ReviewLine]) -> dict[int, str]:
+    """Review number -> the sentence of each usable review that says the product has a value this must-have fails."""
+    found: dict[int, str] = {}
+    for denial in DENIALS.get(must_have.attribute, []):
+        if saved_verdict(must_have, denial.value) != "fail":
+            continue
+        for review in reviews:
+            if review.number not in found and not review.suspicious and (sentence := denial_in(denial, review.text)):
+                found[review.number] = sentence
+    return dict(sorted(found.items()))
+
+
+def unanswered_denial(denying: dict[int, str], agree: set[int] | int, disagree: set[int]) -> str | None:
+    """A denying review the answer didn't count as disagreeing, when the agreeing reviews don't outweigh them all.
+
+    `agree` is the agreeing review numbers, or only their count for checks saved before the numbers were kept.
+    """
+    unanswered = [number for number in denying if number not in disagree]
+    against = disagree | set(denying)
+    agreeing = agree if isinstance(agree, int) else len(agree - against)
+    if unanswered and agreeing < REVIEWS_PER_DISAGREEMENT * len(against):
+        return f'a review says otherwise: "{denying[unanswered[0]].rstrip(".!?")}"'
+    return None
+
+
 class _Judge:
     """Applies the code-level rules to one of Gemini's answers."""
 
@@ -447,9 +572,18 @@ class _Judge:
         getattr(self, f"_{self.kind}")()
         if self.kind != "reviews":
             self._reviews_against_pass()
+        answered = self.answer.evidence
+        self.agree_numbers = self._review_numbers(answered.agree_reviews)
+        self.disagree_numbers = self._review_numbers(answered.disagree_reviews) - self.agree_numbers
+        if self.status == "pass":
+            denying = denying_reviews(self.must_have, self.listing.reviews)
+            if reason := unanswered_denial(denying, self.agree_numbers, self.disagree_numbers):
+                self.downgrade(reason)
         topic = TOPIC_WORDS.get(attribute)
         if self.status == "pass" and topic and not (self.quote and topic.search(self.quote)):
             self.downgrade(f"nothing quoted is about {attribute}")
+        if self.status == "pass" and attribute == "fabric" and not fabric_named(self.must_have, self.quote or ""):
+            self.downgrade("nothing quoted names the fabric")
         confidence = min(1.0, max(0.0, self.answer.confidence))
         evidence = None
         if self.note:
@@ -458,7 +592,9 @@ class _Judge:
                 type=self.kind, note=note, quote=self.quote, box_2d=self.box, agree=self.agree, disagree=self.disagree
             )
         check = Check(must_have_id=self.must_have.id, status=self.status, confidence=confidence, evidence=evidence)
-        return Decided(self.must_have, check, self.answer.status, tuple(self.notes))
+        return Decided(self.must_have, check, self.answer.status, tuple(self.notes),
+                       agree_reviews=tuple(sorted(self.agree_numbers)),
+                       disagree_reviews=tuple(sorted(self.disagree_numbers)))
 
     def _image(self) -> None:
         self.quote = None
@@ -656,19 +792,43 @@ def cache_doc(product_id: str, decided: Decided, model: str) -> dict:
         "raw_status": decided.raw_status,
         "notes": list(decided.notes),
         "model": decided.model or model,
+        "agree_reviews": list(decided.agree_reviews),
+        "disagree_reviews": list(decided.disagree_reviews),
         "version": VERSION,
         "created_at": datetime.now(timezone.utc),
     }
 
 
-def check_from_doc(doc: dict, must_have: MustHave) -> Check | None:
+def saved_problem(doc: dict, check: Check, must_have: MustHave, product: Product) -> str | None:
+    """Why the code rules added after a pass was saved would not accept it now. No Gemini call needed."""
+    evidence = check.evidence
+    if check.status != "pass" or evidence is None:
+        return None
+    if must_have.attribute == "fabric" and not fabric_named(must_have, evidence.quote or ""):
+        return "nothing quoted names the fabric"
+    denying = denying_reviews(must_have, listing_for(product).reviews)
+    if not denying:
+        return None
+    if "disagree_reviews" in doc:
+        return unanswered_denial(denying, set(doc.get("agree_reviews") or []), set(doc["disagree_reviews"] or []))
+    # Older saved checks kept only counts: take the first denials as the ones the answer counted.
+    return unanswered_denial(denying, evidence.agree or 0, set(list(denying)[: evidence.disagree or 0]))
+
+
+def check_from_doc(doc: dict, must_have: MustHave, product: Product | None = None) -> Check | None:
+    """The saved check, or None when it's from an older version or broken. With the product, a saved pass the
+    current code rules would not accept comes back unclear."""
     if doc.get("version") != VERSION:
         return None
     try:
         evidence = Evidence.model_validate(doc["evidence"]) if doc.get("evidence") else None
-        return Check(must_have_id=must_have.id, status=doc["status"], confidence=doc["confidence"], evidence=evidence)
+        check = Check(must_have_id=must_have.id, status=doc["status"], confidence=doc["confidence"], evidence=evidence)
     except (KeyError, ValidationError):
         return None
+    if product is None or not (reason := saved_problem(doc, check, must_have, product)):
+        return check
+    note = check.evidence.note + f" (Not confirmed: {reason}.)"
+    return check.model_copy(update={"status": "unclear", "evidence": check.evidence.model_copy(update={"note": note})})
 
 
 # ---------- Calling Gemini ----------
@@ -883,7 +1043,7 @@ def careful_check(
             if must_have.attribute in SHOP_DETAILS:
                 checks[must_have.id] = shop_check(must_have, product)
                 stats.shop_checks += 1
-            elif (doc := saved.get(doc_id(product.id, must_have))) and (check := check_from_doc(doc, must_have)):
+            elif (doc := saved.get(doc_id(product.id, must_have))) and (check := check_from_doc(doc, must_have, product)):
                 checks[must_have.id] = check
                 stats.cached_checks += 1
         missing = [m for m in asked if m.id not in checks]

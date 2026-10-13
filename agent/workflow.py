@@ -406,7 +406,9 @@ def saved_ticks(brief: ShoppingBrief, product: Product, cache: verify.CheckCache
     for must_have in brief.must_haves:
         if must_have.attribute in verify.SHOP_DETAILS:
             checks.append(verify.shop_check(must_have, product))
-        elif (doc := saved.get(verify.doc_id(product.id, must_have))) and (check := verify.check_from_doc(doc, must_have)):
+        elif (doc := saved.get(verify.doc_id(product.id, must_have))) and (
+            check := verify.check_from_doc(doc, must_have, product)
+        ):
             checks.append(check)
     return ticks_for(brief, keep_quick_verdict(brief, product, Verification(product_id=product.id, checks=checks)))
 

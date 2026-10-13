@@ -613,14 +613,31 @@ Write `agent/learn.py`:
 4. Set at least 1 instance always running, so the first request isn't slow.
 5. Add `scripts/smoke_test.sh`. It calls the deployed service's health check and runs one full search.
 
+**How we deploy:**
+- **First time only:** `python -m scripts.deploy setup` creates the image repository and two service accounts with only the access they need. `ecommai-agent` gets Gemini, Firestore, Model Armor, logs, the uploads bucket and read access to the catalogue. `ecommai-web` gets nothing.
+- **Every time:** `python -m scripts.deploy agent` builds the image, pushes it and updates the service. An unchanged build changes nothing. Then `scripts/smoke_test.sh <url>`.
+- **Settings:**
+ - CPU always allocated, so checks finishing after the 8 s deadline are still saved;
+ - 1–3 instances, 20 requests at once;
+ - 300 s timeout for the live stream;
+ - 1 vCPU / 1 GiB;
+ - public, because the API checks Google sign-in tokens itself.
+- **No secrets are needed:** Google APIs use the service account, so there's nothing to store in Secret Manager.
+- **Logs:** `python -m scripts.deploy logs`.
+
 **Test it**
 - In the cloud: run the smoke test after every deploy.
 - In the cloud: check Cloud Logging for errors during the smoke test.
 
 **Check before moving on**
-- [ ] The smoke test passes against the deployed service
-- [ ] No keys in the code or the container
+- [x] The smoke test passes against the deployed service
+- [x] No keys in the code or the container
 - [ ] Logs show each step and how long it took
+
+**What we found:**
+- **Live address:** https://ecommai-agent-v54j7fs5ma-el.a.run.app.
+- **Smoke test:** health 200, no token 401, sign-in check from our address allowed, other websites refused, and about 90 ms per warm request.
+- **Still to test:** the signed-in full search needs a real Google sign-in from the deployed web app (step 3.8).
 
 ---
 
