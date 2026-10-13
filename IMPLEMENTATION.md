@@ -454,6 +454,10 @@ This is the heart of the product, so it gets the most testing.
  - **reviews Model Armor flagged in step 1.6** are shown to Gemini as suspicious. Never rely on the flag alone: in the trial it missed every gentle trick.
 4. **Run the checks in parallel**, all 12 at once.
 5. **Save every result in the Firestore `checks` collection,** keyed by the product plus the must-have's detail, rule and value (for example `15970__pockets__present__true`). The same check is then never repeated, which makes repeat searches and the demo fast and steady.
+6. **Choose the model to fit our Gemini capacity:**
+ - **Live checks** use `gemini-3.5-flash-lite`, with `gemini-3.8-flash` on the last retry. Live Flash was too slow at the tail, sometimes 16–22 s for 12 products.
+ - **Demo and test searches are pre-checked in batch mode** with Flash (`python -m agent.verify precheck --briefs <file>`), half price, well before any demo. Batch jobs can take up to about 30 minutes.
+ - **The workflow passes `deadline_s=8`:** anything still running shows as "still checking" and is saved when it finishes. On Cloud Run that needs CPU always allocated (step 2.10).
 
 **Test it**
 - Locally: build `tests/checks.jsonl` with **at least 100 product + must-have pairs** that a person has marked pass, fail or unclear, while looking at the full-size photo and the reviews. Run it and measure:
@@ -466,12 +470,25 @@ This is the heart of the product, so it gets the most testing.
 - In the cloud: time a full careful check of 12 products.
 
 **Check before moving on**
-- [ ] Honesty: at least 95% of "pass" answers are truly a pass (our target)
-- [ ] Every planted problem is caught (fail or unclear, never pass)
-- [ ] Every trick review is ignored
-- [ ] No pass without evidence, ever
-- [ ] Photo spots point at the right part of the photo in most cases; if not, we show the full photo with the note instead
-- [ ] Checking 12 products takes a few seconds, and a repeated search is much faster because of saved results
+- [x] Honesty: at least 95% of "pass" answers are truly a pass (our target)
+- [x] Every planted problem is caught (fail or unclear, never pass)
+- [x] Every trick review is ignored
+- [x] No pass without evidence, ever
+- [x] Photo spots point at the right part of the photo in most cases; if not, we show the full photo with the note instead
+- [x] Checking 12 products takes a few seconds, and a repeated search is much faster because of saved results
+
+**What we found** (full report: `data/trials/checks_eval.md`):
+- **Accuracy:**
+ - honesty 100% (53 of 53 passes truly pass);
+ - 476 of 476 planted-problem checks never passed;
+ - 90 of 90 trick checks ignored;
+ - 99% of real fails caught;
+ - 6% unclear.
+- **Speed and cost:** a fresh 12-product search takes 7–9 s with lite and costs about ₹2. From saved results it takes 0.06–0.6 s and is free.
+- **Photo spots:** they land on the right part 28 times out of 30.
+- **Rules enforced in code:** quotes must really appear in the reviews or details. A pass on sheerness, fabric or a review-only detail must quote words about that detail. A pass from reviews needs at least 3 agreeing reviews for each one that disagrees. Flagged or instruction-like reviews never count as evidence. COD and returns are decided from shop data.
+- **Caveat:** `tests/checks.jsonl` (140 pairs) was labelled by the coding agent, not by people. A teammate must review it before any number goes in the deck. The prompt was also written after seeing the kinds of planted problems and tricks, so new kinds will score lower.
+- **Speed in the cloud** is still to be timed once deployed (step 2.10).
 
 ### 2.6 Step 4, Show: rank, explain, and say what to give up
 

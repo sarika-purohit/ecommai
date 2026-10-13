@@ -736,7 +736,10 @@ sessions/{sessionId}
   userId, brief, history, results, feedback
 
 checks/{productId}__{attribute}__{rule}__{value}   // saved careful-check results
+  product_id, attribute, rule, value
   status, confidence, evidence, model, created_at
+  raw_answer, changed_by_code               // Gemini's own answer, and why code rules changed it (if they did)
+  version                                   // prompt and rules version; older results are re-checked
 
 shares/{shareId}
   product_ids, brief, created_at       // opens without sign-in
@@ -908,7 +911,8 @@ Any detail can also be `unknown` when the photo and the real details don't show 
 | Gemini noting details from all 3,000 product photos (one time) | about US$13 (measured on a 20-product trial: US$0.0044 each) |
 | Writing demo reviews for 3,000 products (one time) | about US$3–5 |
 | Gemini embeddings for 3,000 products | under US$1 |
-| One shopper search (understanding plus about 12 careful checks) | about US$0.03 (₹2–3) |
+| One shopper search (understanding plus about 12 careful checks) | about US$0.03 (₹2–3) when checked live; close to zero when the checks are already saved |
+| Pre-checking a demo search in batch mode (about 350 checks) | about US$0.27 |
 | Cloud Run, Firestore and Storage at demo size | mostly free tier |
 
 ### K. Useful links

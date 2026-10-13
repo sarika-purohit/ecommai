@@ -183,3 +183,25 @@ def test_main_sync_mode_is_unchanged(tmp_path: Path, monkeypatch):
     assert enrich.main(argv, client=SimpleNamespace(models=Models()), run_batch_job=boom) == 0
     assert called == []
     assert len(out.read_text().splitlines()) == 1
+
+
+def test_identical_requests_still_count_as_unchanged():
+    from data_prep.vertex_batch import JobRecord, request_signature, requests_unchanged
+
+    lines = [{"key": "a", "request": {"x": 1}}, {"key": "b", "request": {"x": 1}}]
+    record = JobRecord(
+        name="j", resource="r", location="global", model="m", input_uri="in", output_uri="out", keys=["a", "b"],
+        key_signatures={line["key"]: request_signature(line["request"]) for line in lines},
+    )
+    assert requests_unchanged(record, lines)
+    assert record.signatures == {request_signature({"x": 1}): "a"}
+
+
+def test_old_state_files_with_signature_to_key_still_load():
+    from data_prep.vertex_batch import JobRecord
+
+    record = JobRecord.from_json(
+        {"name": "j", "resource": "r", "location": "global", "model": "m", "input_uri": "i", "output_uri": "o",
+         "keys": ["a"], "signatures": {"sig-a": "a"}}
+    )
+    assert record.key_signatures == {"a": "sig-a"}

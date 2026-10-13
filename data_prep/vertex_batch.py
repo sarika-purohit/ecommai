@@ -79,17 +79,27 @@ class JobRecord:
     input_uri: str
     output_uri: str
     keys: list[str]
-    signatures: dict[str, str] = field(default_factory=dict)
+    key_signatures: dict[str, str] = field(default_factory=dict)
     created: str = ""
     state: str = ""
     previous: list[str] = field(default_factory=list)
 
+    @property
+    def signatures(self) -> dict[str, str]:
+        """Request signature -> key, for result lines that come back without their key."""
+        by_signature: dict[str, str] = {}
+        for key, signature in self.key_signatures.items():
+            by_signature.setdefault(signature, key)
+        return by_signature
+
     def to_json(self) -> dict:
-        return self.__dict__
+        return dict(self.__dict__)
 
     @classmethod
     def from_json(cls, data: dict) -> "JobRecord":
         known = {name: data[name] for name in cls.__dataclass_fields__ if name in data}
+        if "key_signatures" not in data and isinstance(data.get("signatures"), dict):
+            known["key_signatures"] = {key: signature for signature, key in data["signatures"].items()}
         return cls(**known)
 
 
@@ -388,7 +398,7 @@ def _submit(
         input_uri=input_uri,
         output_uri=output_uri,
         keys=[line["key"] for line in lines],
-        signatures={request_signature(line["request"]): line["key"] for line in lines},
+        key_signatures={line["key"]: request_signature(line["request"]) for line in lines},
         created=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         state=job_state(job),
     )
@@ -396,10 +406,9 @@ def _submit(
 
 def requests_unchanged(record: JobRecord, lines: Sequence[dict]) -> bool:
     """True when every requested line still matches the body stored for that key."""
-    if not record.signatures:
+    if not record.key_signatures:
         return True
-    by_key = {key: signature for signature, key in record.signatures.items()}
-    return all(by_key.get(line["key"]) == request_signature(line["request"]) for line in lines)
+    return all(record.key_signatures.get(line["key"]) == request_signature(line["request"]) for line in lines)
 
 
 def poll_job(jobs: Jobs, resource: str, *, poll_seconds: float, sleep: Callable[[float], None], log: Log) -> Any:
