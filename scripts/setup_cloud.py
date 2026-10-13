@@ -19,6 +19,8 @@ import google.auth
 from dotenv import load_dotenv
 from google.auth.transport.requests import AuthorizedSession
 
+from data_prep.vertex_batch import ensure_bucket_access
+
 # These don't need billing, and the billing check itself needs cloudbilling.
 BASE_SERVICES = [
     "serviceusage.googleapis.com",
@@ -131,6 +133,34 @@ def create_bucket(api: Api, project: str, bucket: str, location: str) -> Result:
     return Result("photo bucket", "ok", f"gs://{bucket}")
 
 
+def create_private_bucket(api: Api, project: str, bucket: str, location: str, delete_after_days: int) -> Result:
+    step = f"private bucket {bucket}"
+    code, body = api.call("GET", f"https://storage.googleapis.com/storage/v1/b/{bucket}")
+    if code == 200:
+        prevention = body.get("iamConfiguration", {}).get("publicAccessPrevention")
+        return Result(step, "exists" if prevention == "enforced" else "failed", f"public access prevention: {prevention}")
+    code, body = api.call(
+        "POST",
+        f"https://storage.googleapis.com/storage/v1/b?project={project}",
+        json={
+            "name": bucket,
+            "location": location.upper(),
+            "iamConfiguration": {"uniformBucketLevelAccess": {"enabled": True}, "publicAccessPrevention": "enforced"},
+            "lifecycle": {"rule": [{"action": {"type": "Delete"}, "condition": {"age": delete_after_days}}]},
+        },
+    )
+    if code >= 400:
+        return Result(step, "failed", error_text(body))
+    return Result(step, "ok", f"files deleted after {delete_after_days} days")
+
+
+def let_vertex_use_bucket(api: Api, project: str, bucket: str) -> Result:
+    try:
+        return Result(f"vertex access to {bucket}", "ok", ensure_bucket_access(bucket, project, session=api.session))
+    except RuntimeError as error:
+        return Result(f"vertex access to {bucket}", "failed", str(error)[:300])
+
+
 def make_bucket_public(api: Api, bucket: str) -> Result:
     url = f"https://storage.googleapis.com/storage/v1/b/{bucket}/iam"
     code, policy = api.call("GET", url)
@@ -228,6 +258,8 @@ def main() -> None:
         sys.exit("Set GOOGLE_CLOUD_PROJECT in .env first.")
     region = os.environ.get("FIRESTORE_LOCATION", "asia-south1")
     bucket = os.environ.get("GCS_BUCKET") or f"{project}-catalog"
+    upload_bucket = os.environ.get("UPLOAD_BUCKET") or f"{project}-uploads"
+    batch_bucket = os.environ.get("BATCH_BUCKET") or f"{project}-batch"
     dataset = os.environ.get("BIGQUERY_DATASET", "ecommai")
     armor_location = os.environ.get("MODEL_ARMOR_LOCATION", region)
     armor_template = os.environ.get("MODEL_ARMOR_TEMPLATE") or "ecommai-armor"
@@ -240,6 +272,9 @@ def main() -> None:
             create_firestore(api, project, region),
             create_bucket(api, project, bucket, region),
             make_bucket_public(api, bucket),
+            create_private_bucket(api, project, upload_bucket, region, delete_after_days=1),
+            create_private_bucket(api, project, batch_bucket, region, delete_after_days=30),
+            let_vertex_use_bucket(api, project, batch_bucket),
             create_dataset(api, project, dataset, region),
             create_armor_template(api, project, armor_location, armor_template),
         ]

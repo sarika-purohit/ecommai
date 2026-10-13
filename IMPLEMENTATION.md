@@ -40,8 +40,8 @@ This is the step-by-step guide for building EcommAI. `PLAN.md` explains **what**
  - **`agent/agent.py` wraps the same functions as ADK tools** for `adk web`, `adk eval`, MCP and A2A, so there's only one copy of the logic.
 - **Hosting:**
  - the agent runs on Cloud Run in `asia-south1`;
- - the app runs on Firebase App Hosting;
- - the browser calls the agent directly, not through Firebase, so the live checking stream isn't held up.
+ - the app also runs on Cloud Run (`ecommai-web`), deployed with one command (`python -m scripts.deploy web`). We planned Firebase App Hosting, but it needs the GitHub repo connected through the Firebase console plus a Firebase CLI login. Cloud Run meets the competition rules too;
+ - the browser calls the agent directly, so the live checking stream isn't held up.
 - **File names, data formats and endpoints:** follow the developer appendix in `PLAN.md` (data formats, API endpoints, Firestore layout, repo layout, detail vocabulary). If this file and `PLAN.md` ever disagree, fix the wrong one in the same pull request.
 - **Delivery dates** come from India Post's public pincode list (step 2.7).
 - **Demo prices, fees and return rules** are listed in step 1.5.
@@ -592,11 +592,17 @@ Write `agent/learn.py`:
 - Locally: run the full flow on 5 test requests and confirm every result has a tick-list and proof.
 
 **Check before moving on**
-- [ ] Every endpoint has a test
-- [ ] Stream events arrive in order, ending with a summary or an `error` event
-- [ ] Requests without a valid sign-in token are refused
-- [ ] A full search returns results within a few seconds
-- [ ] Errors show friendly messages and nothing crashes
+- [x] Every endpoint has a test
+- [x] Stream events arrive in order, ending with a summary or an `error` event
+- [x] Requests without a valid sign-in token are refused
+- [x] A full search returns results within a few seconds
+- [x] Errors show friendly messages and nothing crashes
+
+**What we found:**
+- **Speed:** a fresh search took about 8 s end to end, with the first result after 6 s. A repeat from saved checks took about 3 s. Making the checklist takes about 5 s. If Flash times out, it switches to Flash-Lite at once.
+- **"What to give up":** the careful check also takes a few products that miss exactly one must-have (they can never be matches). Without them, a strict search had nothing for "what to give up" to count.
+- **Uploads:** shoppers' photos go to a private bucket (`ecommai-511419-uploads`) and are deleted after the search.
+- **ADK:** `adk web .` (from the repo root) lists the agent for hand testing.
 
 ### 2.10 Deploy the agent to Cloud Run
 
@@ -740,7 +746,7 @@ A profile page with:
 
 **Build**
 
-1. Deploy the app to Firebase App Hosting, pointed at the Cloud Run agent.
+1. Deploy the app to Cloud Run (`python -m scripts.deploy web`), pointed at the Cloud Run agent.
 2. Add the app's web address to Firebase Authentication's allowed domains, and to the agent's allowed web addresses (CORS).
 
 **Test it**

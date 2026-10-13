@@ -1,6 +1,8 @@
 .git
 .gitignore
 .env*
+.docker-config
+**/.adk
 .venv
 .uv-cache
 .npm-cache

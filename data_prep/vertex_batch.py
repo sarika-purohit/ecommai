@@ -27,6 +27,7 @@ the JSON yourself, which is what enrichment does.
 
 import hashlib
 import json
+import os
 import re
 import tempfile
 import time
@@ -43,7 +44,7 @@ from google.genai.models import _GenerateContentParameters_to_vertex, _GenerateC
 from pydantic import BaseModel
 
 DEFAULT_LOCATION = "global"
-DEFAULT_BUCKET = "ecommai-511419-catalog"
+DEFAULT_BUCKET = os.environ.get("BATCH_BUCKET") or "ecommai-511419-batch"
 STATE_DIR = Path("data/batch")
 OBJECT_ADMIN = "roles/storage.objectAdmin"
 RUNNING = {"JOB_STATE_QUEUED", "JOB_STATE_PENDING", "JOB_STATE_RUNNING", "JOB_STATE_UPDATING", "JOB_STATE_CANCELLING"}

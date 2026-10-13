@@ -892,7 +892,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--report", type=Path, help="write a readable report for the requested products here")
     parser.add_argument("--mode", choices=("sync", "batch"), default="sync")
     parser.add_argument("--job", help="batch job name; reused to reattach (default: enrich, or enrich-<output>)")
-    parser.add_argument("--bucket", default=os.environ.get("GCS_BUCKET") or "ecommai-511419-catalog")
+    parser.add_argument("--bucket", default=os.environ.get("BATCH_BUCKET") or "ecommai-511419-batch")
     parser.add_argument("--location", default=os.environ.get("GOOGLE_CLOUD_LOCATION") or "global")
     parser.add_argument("--poll-seconds", type=float, default=60, help="how often to check a batch job")
     parser.add_argument(

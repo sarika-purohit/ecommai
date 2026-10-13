@@ -262,7 +262,7 @@ Everything runs on Google Cloud and uses Gemini.
 
 ```mermaid
 flowchart LR
-  U["Shopper's phone"] --> W["Our web app<br/>Firebase App Hosting"]
+  U["Shopper's phone"] --> W["Our web app<br/>Cloud Run"]
   W --> AU["Google sign-in<br/>Firebase Authentication"]
   X["Other AI apps<br/>Gemini, ChatGPT, Claude"] -->|"MCP / A2A"| A
   W --> A["Our agent<br/>Cloud Run + ADK"]
@@ -282,7 +282,7 @@ flowchart LR
 | **Firestore** (with vector search) | Our database for products, users and saved searches. It can also search by meaning using the embeddings |
 | **ADK** (Google's Agent Development Kit) | The framework we build the agent's steps with |
 | **Cloud Run** | Runs our agent on the internet. The competition requires Cloud Run or Firebase |
-| **Firebase App Hosting** | Hosts our web app (Next.js) |
+| **Cloud Run (web)** | Hosts our web app (Next.js), next to the agent |
 | **Firebase Authentication** | Google sign-in for shoppers, so their rules, sizes and style are saved |
 | **Cloud Storage** | Stores the product photos |
 | **BigQuery** | Stores search logs (no personal details) for the seller insights page |
@@ -411,7 +411,7 @@ The team writes the 50 test requests together, across categories and in English 
 4. Create a Firestore database in the Mumbai region (`asia-south1`).
 5. Create a Cloud Storage bucket for product photos, for example `ecommai-catalog`.
 6. Use Gemini through Google Cloud's Agent Platform, not a separate AI Studio key, so the free credits pay for it.
-7. Add Firebase to the same project: turn on Firebase Authentication with Google sign-in, and Firebase App Hosting for the web app.
+7. Add Firebase to the same project and turn on Firebase Authentication with Google sign-in.
 8. Add teammates to the project.
 
 ### Each developer's laptop

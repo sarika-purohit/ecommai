@@ -388,7 +388,7 @@ def run_batch(items: list[Item], args: argparse.Namespace) -> tuple[list[dict], 
     else:
         lines = [verify.batch_line(item.key, item.product, item.must_haves, args.model) for item in items]
         found = run_job(
-            job, lines, model=args.model, bucket=os.environ.get("GCS_BUCKET") or "ecommai-511419-catalog",
+            job, lines, model=args.model, bucket=os.environ.get("BATCH_BUCKET") or "ecommai-511419-batch",
             project=os.environ.get("GOOGLE_CLOUD_PROJECT") or "", poll_seconds=args.poll_seconds,
         )
     outcome = verify.apply_batch(found, plans)

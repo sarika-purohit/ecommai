@@ -1115,7 +1115,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     pre.add_argument("--collection", default=DEFAULT_COLLECTION, help="default: checks (tests use checks_trial)")
     pre.add_argument("--model", default=default_model())
     pre.add_argument("--job", default="precheck", help="batch job name; reused to reattach")
-    pre.add_argument("--bucket", default=os.environ.get("GCS_BUCKET") or "ecommai-511419-catalog")
+    pre.add_argument("--bucket", default=os.environ.get("BATCH_BUCKET") or "ecommai-511419-batch")
     pre.add_argument("--poll-seconds", type=float, default=60)
     pre.add_argument("--limit", type=int, help="at most this many batch requests")
     pre.add_argument("--dry-run", action="store_true", help="count what would be sent, send nothing")
