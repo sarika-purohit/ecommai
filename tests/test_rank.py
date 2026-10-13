@@ -50,7 +50,7 @@ def test_rejections_are_counted_under_the_first_failed_must_have_in_brief_order(
         make_candidate("f", "upfp"),
     ]
     results = rank(make_brief(), candidates)
-    assert results.rejected == {"no pockets": 3, "see-through": 1, "not cotton": 1, "not three-quarter": 1}
+    assert results.rejected == {"no pockets": 3, "see-through": 1, "not cotton": 1, "not three-quarter sleeves": 1}
     assert list(results.rejected)[0] == "no pockets"
 
 
@@ -88,7 +88,7 @@ def test_a_must_have_without_a_check_counts_as_unclear():
 def test_ticks_follow_the_brief_with_labels_and_evidence():
     results = rank(make_brief(), [make_candidate("a", "pppp")])
     ticks = results.matches[0].ticks
-    assert [t.label for t in ticks] == ["cotton", "pockets", "three-quarter", "not see-through"]
+    assert [t.label for t in ticks] == ["cotton", "pockets", "three-quarter sleeves", "not see-through"]
     assert all(t.status == "pass" and t.evidence is not None for t in ticks)
     assert ticks[1].evidence.note == "m2 pass"
 

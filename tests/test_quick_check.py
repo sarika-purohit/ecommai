@@ -61,7 +61,7 @@ def test_a_catalogue_value_does_not_drop_when_geminis_own_reading_meets_the_must
     "must_have, fields, reason",
     [
         (COD, {"cod": (False, 0)}, "no cash on delivery"),
-        (must("returnable", "present", True), {"returns": (False, False)}, "no returnable"),
+        (must("returnable", "present", True), {"returns": (False, False)}, "not returnable"),
         (must("exchange", "is", "yes"), {"returns": (True, False)}, "no exchange"),
         (must("cod", "absent", True), {"cod": (True, 29)}, "cash on delivery"),
     ],

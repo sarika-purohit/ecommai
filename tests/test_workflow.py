@@ -354,7 +354,7 @@ def test_removing_must_haves_and_switching_rules_off_and_on():
 
     off = edit(edited.brief, SetRule(type="set_rule", must_have=COD, enabled=False), rules=rules)
     assert [m.attribute for m in off.brief.must_haves][-1] == "upper_material"
-    assert off.disabled == {COD.key()} and off.brief.rules_applied == ["not suede"]
+    assert off.disabled == {COD.key()} and off.brief.rules_applied == ["not suede upper"]
 
     on = edit(off.brief, SetRule(type="set_rule", must_have=COD, enabled=True), rules=off.rules, disabled=off.disabled)
     assert on.disabled == set() and on.brief.must_haves[-1].attribute == "cod"

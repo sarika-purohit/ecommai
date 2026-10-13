@@ -86,7 +86,7 @@ def test_a_brief_uses_the_saved_rules_and_starts_a_session():
     assert [(m["id"], m["attribute"], m["from_rule"]) for m in brief["must_haves"]] == [
         ("m1", "type", False), ("m2", "colour", False), ("m3", "logo_visible", False), ("r1", "upper_material", True),
     ]
-    assert brief["rules_applied"] == ["not suede"]
+    assert brief["rules_applied"] == ["not suede upper"]
     session = wired.store.db.docs("sessions")[made["session_id"]]
     assert session["user_id"] == DEMO_USER_ID and session["query_text"] == REQUEST["text"]
     assert wired.store.db.docs("users")[DEMO_USER_ID]["pincode"] == BENGALURU

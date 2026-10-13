@@ -864,7 +864,7 @@ def test_scoring_separates_invented_from_wrong_strength_and_wrong_values():
     ], question="Which size?")
     scored = score(case, BriefOutcome(brief))
     assert scored.invented == ["cotton (fabric)"]
-    assert scored.wrong_strength == ["office (usage)"]
+    assert scored.wrong_strength == ["for office (usage)"]
     assert not scored.right["must_haves"] and scored.right["question"]
 
 

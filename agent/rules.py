@@ -7,27 +7,107 @@ from agent.models import MustHave, ShoppingBrief
 from data_prep import schemas
 
 ATTRIBUTE_WORDS = {"cod": "cash on delivery"}
+# Yes/no details that read as adjectives, so their absence is "not polarised" rather than "no polarised".
+ADJECTIVE_DETAILS = {"polarised", "returnable"}
 
-LABELS = {"is": "{}", "is_not": "not {}", "at_most": "≤ {}", "at_least": "≥ {}"}
-FAILURE_LABELS = {"is": "not {}", "is_not": "{}", "at_most": "over {}", "at_least": "under {}"}
+# How a value reads on a chip; "{}" is the value. Details not listed read as the bare value ("cotton").
+PHRASES = {
+    "sleeve_length": "{} sleeves",
+    "neckline": "{} neck",
+    "pockets": "{} pocket",
+    "print_intensity": "{} print",
+    "fit": "{} fit",
+    "length": "{} length",
+    "closure": "{} closure",
+    "usage": "for {}",
+    "rise": "{} rise",
+    "wash": "{} wash",
+    "distressed": "{} distressing",
+    "sole_type": "{} sole",
+    "sole_colour": "{} sole",
+    "upper_material": "{} upper",
+    "logo_visible": "{} logo",
+    "heel_height": "{} heel",
+    "display": "{} display",
+    "dial_colour": "{} dial",
+    "dial_markings": "{} on the dial",
+    "case_shape": "{} case",
+    "case_material": "{} case",
+    "case_size": "{} case",
+    "strap_material": "{} strap",
+    "strap_colour": "{} strap",
+    "size": "{} size",
+    "compartments": "{} compartments",
+    "frame_shape": "{} frames",
+    "frame_material": "{} frames",
+    "lens_colour": "{} lenses",
+    "durability": "{} durability",
+}
+VALUE_PHRASES = {
+    ("sleeve_length", "sleeveless"): "sleeveless",
+    ("neckline", "v-neck"): "v-neck",
+    ("neckline", "collar"): "collar",
+    ("neckline", "mandarin"): "mandarin collar",
+    ("neckline", "polo"): "polo collar",
+    ("pockets", "none"): "no pockets",
+    ("pockets", "front and back"): "front and back pockets",
+    ("pockets", "cargo"): "cargo pockets",
+    ("print_intensity", "none"): "no print",
+    ("closure", "none"): "no closure",
+    ("distressed", "none"): "no distressing",
+    ("wash", "none"): "no wash",
+    ("logo_visible", "none"): "no logo",
+    ("dial_markings", "none"): "plain dial",
+    ("compartments", "one"): "one compartment",
+    ("colour_match", "as shown"): "colour as shown",
+    ("colour_match", "different"): "colour differs from the photo",
+    ("colour_fastness", "good"): "colour doesn't fade",
+    ("colour_fastness", "fades"): "colour fades",
+}
+
+LIMITS = {"at_most": "≤ {}", "at_least": "≥ {}"}
+LIMIT_FAILURES = {"at_most": "over {}", "at_least": "under {}"}
+
+
+def phrase(attribute: str, value: str | bool | float) -> str:
+    """A detail value as words: ('sleeve_length', 'full') -> 'full sleeves', ('neckline', 'mandarin') -> 'mandarin collar'."""
+    text = _value_text(value)
+    return VALUE_PHRASES.get((attribute, text.lower()), PHRASES.get(attribute, "{}").format(text))
 
 
 def label(must_have: MustHave) -> str:
-    """Short chip text for the app: 'cotton', 'not polyester', 'pockets', 'no logo visible', '≤ 40'."""
+    """Short chip text for the app: 'cotton', 'full sleeves', 'not polyester', 'pockets', 'no logo visible', '≤ 40'."""
     wanted = _wanted_presence(must_have)
     if wanted is not None:
-        words = _words(must_have.attribute)
-        return words if wanted else f"no {words}"
-    return LABELS[must_have.rule].format(_value_text(must_have.value))
+        return _presence_words(must_have.attribute, wanted)
+    if must_have.rule in LIMITS:
+        return LIMITS[must_have.rule].format(_value_text(must_have.value))
+    words = phrase(must_have.attribute, must_have.value)
+    if must_have.rule == "is":
+        return words
+    return words.removeprefix("no ") if words.startswith("no ") else f"not {words}"
 
 
 def failure_label(must_have: MustHave) -> str:
-    """Why a product failed this must-have, as used in rejection counts: 'no pockets', 'see-through'."""
+    """Why a product failed this must-have, as used in rejection counts: 'no chest pocket', 'see-through'."""
     wanted = _wanted_presence(must_have)
     if wanted is not None:
-        words = _words(must_have.attribute)
-        return f"no {words}" if wanted else words
-    return FAILURE_LABELS[must_have.rule].format(_value_text(must_have.value))
+        return _presence_words(must_have.attribute, not wanted)
+    if must_have.rule in LIMIT_FAILURES:
+        return LIMIT_FAILURES[must_have.rule].format(_value_text(must_have.value))
+    words = phrase(must_have.attribute, must_have.value)
+    if must_have.rule == "is_not":
+        return words
+    if words.startswith("no "):
+        return f"has {words.removeprefix('no ')}"
+    return f"no {words}" if must_have.attribute == "pockets" else f"not {words}"
+
+
+def _presence_words(attribute: str, present: bool) -> str:
+    words = _words(attribute)
+    if present:
+        return words
+    return f"not {words}" if attribute in ADJECTIVE_DETAILS else f"no {words}"
 
 
 def apply_rules(brief: ShoppingBrief, rules: list[MustHave], disabled: Set[str] = frozenset()) -> ShoppingBrief:
