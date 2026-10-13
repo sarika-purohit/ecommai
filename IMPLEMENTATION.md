@@ -773,6 +773,13 @@ A profile page with:
 - [ ] The live link works on both phones, including Google sign-in
 - [ ] Someone who hasn't seen the app before can do a search without help
 
+**What we found:**
+- **Live links:** the app is at https://ecommai-web-v54j7fs5ma-el.a.run.app, and the agent at https://ecommai-agent-v54j7fs5ma-el.a.run.app.
+- **Instances:** both keep 1 instance running.
+- **Sign-in domains:** the deploy adds the app's addresses to Firebase's allowed sign-in domains.
+- **Allowed web addresses:** the agent accepts requests from the app and from `http://localhost:3000`, so you can develop locally against the cloud agent. Run `python -m scripts.deploy agent --web-url <app> --web-url http://localhost:3000` after any `web` deploy, because `web` resets that list.
+- **Known risk:** redirect sign-in can fail in iPhone Safari. If it does, serve `/__/auth/*` from the app and use the app's address as the sign-in domain.
+
 ---
 
 ## Phase 4: Voice, photo and "I saw it"

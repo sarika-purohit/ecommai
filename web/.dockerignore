@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+.env*
+npm-debug.log*
+tsconfig.tsbuildinfo
+Dockerfile
+.dockerignore
+*.md

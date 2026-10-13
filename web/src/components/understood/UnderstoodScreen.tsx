@@ -7,6 +7,7 @@ import { EditableTag, focusEditKey } from "@/components/EditableTag";
 import {
   ArrowRightIcon,
   CalendarIcon,
+  InfoIcon,
   LockIcon,
   PhotoIcon,
   PinIcon,
@@ -128,6 +129,12 @@ function Checklist({ session }: { session: SearchSession }) {
                 <span className="tag-text">{text.withPhoto}</span>
               </Tag>
             </div>
+          ) : null}
+          {brief.not_checkable?.length ? (
+            <p className="mt-3 flex gap-2 text-base text-ink-soft">
+              <InfoIcon className="mt-0.5 size-5 flex-none text-indigo" />
+              {strings.results.notCheckable(brief.not_checkable)}
+            </p>
           ) : null}
         </div>
       </div>

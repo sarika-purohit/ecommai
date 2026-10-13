@@ -121,7 +121,8 @@ def test_events_arrive_in_order_and_the_summary_adds_up():
     done = outcome.done
     assert [card.product_id for card in done.matches] == ["s1", "s2", "s3"]
     assert done.rejected == {"not white": 2, "logo visible": 1, "over budget": 1}
-    assert done.checked == 6 and done.passed == 3 and done.unclear == 0
+    assert done.checked == 7 and done.passed == 3 and done.unclear == 0
+    assert done.checked == done.passed + done.unclear + sum(done.rejected.values()) + done.duplicates
     card = done.matches[0]
     assert card.thumb.endswith("/thumb/s1.jpg") and card.photo.endswith("/gemini/s1.jpg")
     assert card.sizes_in_stock == ["UK 8", "UK 9"]

@@ -1,6 +1,6 @@
 import { rupees, shortDay } from "@/lib/format";
 import { strings, type AttributeWords } from "@/lib/strings";
-import type { DetailValue, MustHave, NiceToHave, Rule, ShoppingBrief, Tradeoff } from "@/lib/types";
+import type { DetailValue, MustHave, NiceToHave, Rule, ShoppingBrief, Tick, Tradeoff } from "@/lib/types";
 
 const words = strings.labels;
 
@@ -73,13 +73,23 @@ export function categoryLabel(brief: Pick<ShoppingBrief, "category" | "gender">)
   return words.category(category, gender);
 }
 
-export function tradeoffLabel(tradeoff: Tradeoff): string {
-  if (tradeoff.relax === "deadline" && typeof tradeoff.to === "string") {
-    return strings.results.tradeoffDeadline(shortDay(tradeoff.to));
-  }
-  if (tradeoff.relax === "budget" && typeof tradeoff.to === "number") {
-    return strings.results.tradeoffBudget(rupees(tradeoff.to));
-  }
-  const attribute = tradeoff.relax.startsWith("must_have:") ? tradeoff.relax.slice("must_have:".length) : tradeoff.relax;
-  return strings.results.tradeoffMustHave(attributeName(attribute));
+/** A tick shows the same words as its chip on the checklist; the agent's own label is the fallback. */
+export function tickLabel(tick: Tick, brief: ShoppingBrief | null): string {
+  const mustHave = brief?.must_haves.find((m) => m.id === tick.must_have_id);
+  return mustHave ? mustHaveLabel(mustHave) : capitalise(tick.label);
+}
+
+/** The attribute a "must_have:<attribute>" trade-off drops, or null for deadline and budget. */
+export function tradeoffAttribute(tradeoff: Tradeoff): string | null {
+  return tradeoff.relax.startsWith("must_have:") ? tradeoff.relax.slice("must_have:".length) : null;
+}
+
+export function tradeoffLabel(tradeoff: Tradeoff, brief: ShoppingBrief): string {
+  const text = strings.results;
+  if (tradeoff.relax === "deadline" && typeof tradeoff.to === "string") return text.tradeoffDeadline(shortDay(tradeoff.to));
+  if (tradeoff.relax === "budget" && tradeoff.to !== null) return text.tradeoffBudget(rupees(Number(tradeoff.to)));
+  const attribute = tradeoffAttribute(tradeoff) ?? tradeoff.relax;
+  const dropped = brief.must_haves.filter((m) => m.attribute === attribute);
+  const label = dropped.length === 1 ? mustHaveLabel(dropped[0]) : attributeName(attribute);
+  return dropped.length > 0 && dropped.every((m) => m.from_rule) ? text.tradeoffRule(label) : text.tradeoffMustHave(label);
 }

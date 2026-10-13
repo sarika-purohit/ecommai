@@ -3,7 +3,6 @@
 import { getIdToken } from "@/lib/auth";
 import { apiBaseUrl, mockApi } from "@/lib/config";
 import { blobToBase64, shrinkPhoto } from "@/lib/image";
-import * as mock from "@/lib/mock";
 import { readSse } from "@/lib/sse";
 import {
   SEARCH_EVENT_TYPES,
@@ -13,9 +12,19 @@ import {
   type BriefResponse,
   type BriefUpdateRequest,
   type BriefUpdateResponse,
+  type CheckoutRequest,
+  type CheckoutResponse,
+  type DoneEvent,
+  type FeedbackAction,
+  type FeedbackRequest,
+  type Me,
+  type MeUpdate,
+  type MustHave,
   type ProductDetails,
+  type RulesBody,
   type SearchEvent,
   type SearchRequest,
+  type ShoppingBrief,
 } from "@/lib/types";
 
 export type ApiErrorKind = "network" | "unauthorized" | "busy" | "badRequest" | "notFound" | "server";
@@ -62,20 +71,42 @@ async function send(path: string, init: RequestInit & { headers?: Record<string,
   return response;
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
+async function requestJson<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
   const response = await send(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
+    method,
+    headers: body === undefined ? { Accept: "application/json" } : { "Content-Type": "application/json", Accept: "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new ApiError("server", response.status);
+  }
 }
 
-function fromMock<T>(promise: Promise<T>): Promise<T> {
-  return promise.catch((error: unknown) => {
-    if (error instanceof mock.MockNotFound) throw new ApiError("notFound", 404, false);
+// The mock and its sample catalogue load only in mock mode, so real builds never ship them.
+type MockModule = typeof import("@/lib/mock");
+
+function loadMock(): Promise<MockModule> {
+  return import("@/lib/mock");
+}
+
+function isMockNotFound(error: unknown): boolean {
+  return error instanceof Error && error.name === "MockNotFound";
+}
+
+async function viaMock<T>(call: (mock: MockModule) => Promise<T>): Promise<T> {
+  try {
+    return await call(await loadMock());
+  } catch (error) {
+    if (isMockNotFound(error)) throw new ApiError("notFound", 404, false);
     throw error;
-  });
+  }
+}
+
+/** Fills in fields an older agent might leave out, so screens can rely on them. */
+function withDefaults(brief: ShoppingBrief): ShoppingBrief {
+  return { ...brief, not_checkable: brief.not_checkable ?? [], missing: brief.missing ?? [] };
 }
 
 async function briefBody(input: BriefInput): Promise<BriefRequestBody> {
@@ -93,15 +124,31 @@ async function briefBody(input: BriefInput): Promise<BriefRequestBody> {
 
 /** POST /api/brief: turn the shopper's words and photo into a checklist. */
 export async function createBrief(input: BriefInput): Promise<BriefResponse> {
-  if (mockApi) return fromMock(mock.createBrief(input));
-  return postJson<BriefResponse>("/api/brief", await briefBody(input));
+  const response = mockApi
+    ? await viaMock((mock) => mock.createBrief(input))
+    : await requestJson<BriefResponse>("POST", "/api/brief", await briefBody(input));
+  return { ...response, brief: withDefaults(response.brief) };
 }
 
 /** POST /api/brief/update: apply one edit to the checklist and get the whole checklist back. */
 export async function updateBrief(sessionId: string, change: BriefChange): Promise<BriefUpdateResponse> {
-  if (mockApi) return fromMock(mock.updateBrief(sessionId, change));
   const body: BriefUpdateRequest = { session_id: sessionId, change };
-  return postJson<BriefUpdateResponse>("/api/brief/update", body);
+  const response = mockApi
+    ? await viaMock((mock) => mock.updateBrief(sessionId, change))
+    : await requestJson<BriefUpdateResponse>("POST", "/api/brief/update", body);
+  return { brief: withDefaults(response.brief) };
+}
+
+function withDoneDefaults(event: DoneEvent): DoneEvent {
+  return {
+    ...event,
+    rejected: event.rejected ?? {},
+    duplicates: event.duplicates ?? 0,
+    tradeoffs: event.tradeoffs ?? [],
+    matches: event.matches ?? [],
+    almost: event.almost ?? [],
+    not_checkable: event.not_checkable ?? [],
+  };
 }
 
 function toSearchEvent(name: string, data: string): SearchEvent | null {
@@ -113,7 +160,8 @@ function toSearchEvent(name: string, data: string): SearchEvent | null {
   }
   const type = name !== "message" ? name : String(payload.type ?? "");
   if (!SEARCH_EVENT_TYPES.has(type as SearchEvent["type"])) return null;
-  return { ...payload, type } as SearchEvent;
+  const event = { ...payload, type } as SearchEvent;
+  return event.type === "done" ? withDoneDefaults(event) : event;
 }
 
 /**
@@ -121,7 +169,7 @@ function toSearchEvent(name: string, data: string): SearchEvent | null {
  * becomes an ApiError carrying the agent's message. A stream that stops early is a network error.
  */
 export async function* searchProducts(sessionId: string, signal?: AbortSignal): AsyncGenerator<SearchEvent> {
-  const source = mockApi ? mock.streamSearch(sessionId, signal) : liveStream(sessionId, signal);
+  const source = mockApi ? mockStream(sessionId, signal) : liveStream(sessionId, signal);
   try {
     for await (const event of source) {
       if (event.type === "error") {
@@ -131,10 +179,15 @@ export async function* searchProducts(sessionId: string, signal?: AbortSignal): 
       if (event.type === "done") return;
     }
   } catch (error) {
-    if (error instanceof mock.MockNotFound) throw new ApiError("notFound", 404, false);
+    if (isMockNotFound(error)) throw new ApiError("notFound", 404, false);
     throw error;
   }
   throw new ApiError("network");
+}
+
+async function* mockStream(sessionId: string, signal?: AbortSignal): AsyncGenerator<SearchEvent> {
+  const mock = await loadMock();
+  yield* mock.streamSearch(sessionId, signal);
 }
 
 async function* liveStream(sessionId: string, signal?: AbortSignal): AsyncGenerator<SearchEvent> {
@@ -159,11 +212,74 @@ async function* liveStream(sessionId: string, signal?: AbortSignal): AsyncGenera
 
 /** GET /api/products/{id}, with the tick-list for this session's checklist when a session is given. */
 export async function getProduct(productId: string, sessionId?: string): Promise<ProductDetails> {
-  if (mockApi) return fromMock(mock.getProduct(productId, sessionId));
+  if (mockApi) return viaMock((mock) => mock.getProduct(productId, sessionId));
   const query = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
-  const response = await send(`/api/products/${encodeURIComponent(productId)}${query}`, {
-    method: "GET",
-    headers: { Accept: "application/json" },
+  return requestJson<ProductDetails>("GET", `/api/products/${encodeURIComponent(productId)}${query}`);
+}
+
+/** POST /api/feedback: likes, saves and purchases teach the agent the shopper's style. */
+export async function sendFeedback(sessionId: string, productId: string, action: FeedbackAction): Promise<void> {
+  const body: FeedbackRequest = { session_id: sessionId, product_id: productId, action };
+  if (mockApi) {
+    await viaMock((mock) => mock.sendFeedback(body));
+    return;
+  }
+  await requestJson("POST", "/api/feedback", body);
+}
+
+/** POST /api/checkout: where to send the shopper to buy this product in this size. */
+export async function checkout(productId: string, size: string | null): Promise<CheckoutResponse> {
+  const body: CheckoutRequest = { product_id: productId, size };
+  if (mockApi) return viaMock((mock) => mock.checkout(body));
+  return requestJson<CheckoutResponse>("POST", "/api/checkout", body);
+}
+
+/** GET /api/rules: the shopper's saved personal rules. */
+export async function getRules(): Promise<MustHave[]> {
+  const response = mockApi ? await viaMock((mock) => mock.getRules()) : await requestJson<RulesBody>("GET", "/api/rules");
+  return response.rules;
+}
+
+/** PUT /api/rules: replaces every saved rule. */
+export async function saveRules(rules: MustHave[]): Promise<MustHave[]> {
+  const body: RulesBody = { rules };
+  const response = mockApi ? await viaMock((mock) => mock.saveRules(body)) : await requestJson<RulesBody>("PUT", "/api/rules", body);
+  return response.rules ?? rules;
+}
+
+/** GET /api/me */
+export async function getMe(): Promise<Me> {
+  if (mockApi) return viaMock((mock) => mock.getMe());
+  return requestJson<Me>("GET", "/api/me");
+}
+
+/** PUT /api/me: change the saved pincode or language. */
+export async function updateMe(change: MeUpdate): Promise<void> {
+  if (mockApi) {
+    await viaMock((mock) => mock.updateMe(change));
+    return;
+  }
+  await send("/api/me", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(change),
   });
-  return (await response.json()) as ProductDetails;
+}
+
+/** DELETE /api/me: removes the shopper's profile, rules, learned style and past searches. */
+export async function deleteMe(): Promise<void> {
+  if (mockApi) {
+    await viaMock((mock) => mock.deleteMe());
+    return;
+  }
+  await requestJson("DELETE", "/api/me");
+}
+
+/** DELETE /api/me/taste: forget the learned style. */
+export async function clearTaste(): Promise<void> {
+  if (mockApi) {
+    await viaMock((mock) => mock.clearTaste());
+    return;
+  }
+  await requestJson("DELETE", "/api/me/taste");
 }

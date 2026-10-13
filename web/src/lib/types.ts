@@ -34,6 +34,8 @@ export interface ShoppingBrief {
   reference_image_url: string | null;
   language: string;
   missing: string[];
+  /** Wishes the agent can't check yet, such as a brand. Shown to the shopper, never used to filter. */
+  not_checkable: string[];
   question: string | null;
 }
 
@@ -75,11 +77,29 @@ export interface Tick {
 export interface RankedResult {
   product_id: string;
   title: string;
+  /** Rupees, including delivery and the COD fee when the checklist asks for cash on delivery. */
   total_price: number;
   delivery_date: string | null;
   ticks: Tick[];
   reason: string;
   score: number;
+}
+
+/** agent/cards.py `ResultCard`: a ranked result plus what the card shows. */
+export interface ResultCard extends RankedResult {
+  brand: string | null;
+  thumb: string | null;
+  /** The gemini/ photo (about 1,000 px), the one the careful check looked at. */
+  photo: string | null;
+  original: string | null;
+  price: Price | null;
+  delivery_fee: number;
+  cod: Cod | null;
+  returns: Returns | null;
+  rating_avg: number | null;
+  rating_count: number;
+  demo_data: boolean;
+  sizes_in_stock: string[];
 }
 
 /** relax is "deadline", "budget" or "must_have:<attribute>"; to is an ISO date or rupees. */
@@ -94,6 +114,8 @@ export interface Attribute {
   confidence: number;
   note: string;
   source: "gemini" | "catalogue";
+  /** What Gemini saw in the photo, when the catalogue value was used instead. */
+  gemini_value?: DetailValue | null;
 }
 
 export interface Price {
@@ -159,9 +181,16 @@ export interface Product {
   demo_data: boolean;
 }
 
-/** GET /api/products/{id}: the product, plus its tick-list for the session's must-haves when a session is given. */
+/**
+ * GET /api/products/{id}: the product without its embedding (agent/cards.py `product_view`), plus its
+ * tick-list for the session's must-haves when a session is given. Delivery date and total price are
+ * optional extras; the product page falls back to the result card when they're missing.
+ */
 export interface ProductDetails extends Product {
+  sizes_in_stock?: string[];
   ticks?: Tick[];
+  delivery_date?: string | null;
+  total_price?: number | null;
 }
 
 // ---------- Requests and responses ----------
@@ -219,11 +248,15 @@ export interface SearchRequest {
 export interface CandidatesEvent {
   type: "candidates";
   count: number;
+  /** Products the quick check ruled out from their saved details, before the careful check. */
+  dropped: number;
 }
 
 export interface CheckingEvent {
   type: "checking";
   product_id: string;
+  title: string;
+  thumb: string | null;
 }
 
 export interface VerifiedEvent {
@@ -239,10 +272,11 @@ export interface DoneEvent {
   passed: number;
   unclear: number;
   rejected: Record<string, number>;
+  duplicates: number;
   tradeoffs: Tradeoff[];
-  matches?: RankedResult[];
-  almost?: RankedResult[];
-  duplicates?: number;
+  matches: ResultCard[];
+  almost: ResultCard[];
+  not_checkable: string[];
 }
 
 export interface ErrorEvent {
@@ -260,3 +294,45 @@ export const SEARCH_EVENT_TYPES: ReadonlySet<SearchEvent["type"]> = new Set([
   "done",
   "error",
 ]);
+
+export type FeedbackAction = "like" | "save" | "dislike" | "buy";
+
+export interface FeedbackRequest {
+  session_id: string;
+  product_id: string;
+  action: FeedbackAction;
+}
+
+export interface OkResponse {
+  ok: boolean;
+}
+
+/** GET and PUT /api/rules. Saved rules are must-haves with from_rule: true. */
+export interface RulesBody {
+  rules: MustHave[];
+}
+
+/** GET /api/me */
+export interface Me {
+  name: string | null;
+  email: string | null;
+  pincode: string | null;
+  rules: MustHave[];
+  has_taste: boolean;
+}
+
+/** PUT /api/me */
+export interface MeUpdate {
+  pincode?: string;
+  language?: string;
+}
+
+export interface CheckoutRequest {
+  product_id: string;
+  size: string | null;
+}
+
+export interface CheckoutResponse {
+  /** The store's checkout page for this product and size; our demo store is /checkout?product=&size=. */
+  redirect_url: string;
+}

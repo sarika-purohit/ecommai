@@ -1,15 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
-import { CheckIcon, CloseIcon, QuestionIcon } from "@/components/icons";
+import { PhotoIcon } from "@/components/icons";
 import { NoSession, ScreenPlaceholder } from "@/components/NoSession";
-import { isAbort, searchProducts } from "@/lib/api";
+import { StatusIcon } from "@/components/proof/TickList";
+import { ResultsView } from "@/components/results/ResultsView";
+import { ApiError, isAbort, searchProducts } from "@/lib/api";
 import { canRetry, errorMessage } from "@/lib/errors";
-import { tradeoffLabel } from "@/lib/labels";
-import { sessionStore } from "@/lib/session";
+import { clearSearch, resultsStore, sessionStore, type SearchSession } from "@/lib/session";
 import { useIsClient } from "@/lib/stored";
 import { strings } from "@/lib/strings";
 import type { DoneEvent, SearchEvent, Status } from "@/lib/types";
@@ -18,35 +20,43 @@ const text = strings.results;
 
 type SlotState = "checking" | Status;
 
+interface Slot {
+  productId: string;
+  title: string;
+  thumb: string | null;
+  state: SlotState;
+}
+
 interface Progress {
   found: number | null;
-  slots: { productId: string; state: SlotState }[];
-  done: DoneEvent | null;
+  dropped: number;
+  slots: Slot[];
   error: { message: string; retryable: boolean } | null;
 }
 
 type Action = { type: "event"; event: SearchEvent } | { type: "failed"; message: string; retryable: boolean };
 
-const START: Progress = { found: null, slots: [], done: null, error: null };
+const START: Progress = { found: null, dropped: 0, slots: [], error: null };
 
 function reduce(state: Progress, action: Action): Progress {
   if (action.type === "failed") return { ...state, error: { message: action.message, retryable: action.retryable } };
   const { event } = action;
   switch (event.type) {
     case "candidates":
-      return { ...START, found: event.count };
+      return { ...START, found: event.count, dropped: event.dropped ?? 0 };
     case "checking":
       if (state.slots.some((slot) => slot.productId === event.product_id)) return state;
-      return { ...state, slots: [...state.slots, { productId: event.product_id, state: "checking" }] };
+      return {
+        ...state,
+        slots: [...state.slots, { productId: event.product_id, title: event.title, thumb: event.thumb ?? null, state: "checking" }],
+      };
     case "verified": {
       const known = state.slots.some((slot) => slot.productId === event.product_id);
       const slots = known
         ? state.slots.map((slot) => (slot.productId === event.product_id ? { ...slot, state: event.status } : slot))
-        : [...state.slots, { productId: event.product_id, state: event.status }];
+        : [...state.slots, { productId: event.product_id, title: "", thumb: null, state: event.status }];
       return { ...state, slots };
     }
-    case "done":
-      return { ...state, done: event };
     default:
       return state;
   }
@@ -55,86 +65,133 @@ function reduce(state: Progress, action: Action): Progress {
 export function ResultsScreen() {
   const isClient = useIsClient();
   const session = sessionStore.use();
+  const results = resultsStore.use();
   const [retries, setRetries] = useState(0);
+  const [announcement, setAnnouncement] = useState("");
+  const [finishedHere, setFinishedHere] = useState(false);
+
+  const current =
+    session && results && results.sessionId === session.sessionId && results.searchRun === session.searchRun ? results : null;
+
+  function finish(done: DoneEvent, ranWith: SearchSession) {
+    resultsStore.set({ sessionId: ranWith.sessionId, searchRun: ranWith.searchRun, brief: ranWith.brief, done });
+    setFinishedHere(true);
+    setAnnouncement(text.summary(done.checked, done.passed));
+  }
 
   return (
     <>
       <AppHeader back={{ href: "/understood", label: text.back }} />
-      <main className="shell pb-12 pt-2">
+      <main className="shell pb-16 pt-2">
+        <p role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
         {!isClient ? (
           <ScreenPlaceholder />
-        ) : session ? (
+        ) : !session ? (
+          <NoSession />
+        ) : current ? (
+          <ResultsView session={session} results={current} focusHeading={finishedHere} onAnnounce={setAnnouncement} />
+        ) : (
           <SearchProgress
             key={`${session.sessionId}:${session.searchRun}:${retries}`}
-            sessionId={session.sessionId}
+            session={session}
+            onDone={finish}
             onRetry={() => setRetries((count) => count + 1)}
           />
-        ) : (
-          <NoSession />
         )}
       </main>
     </>
   );
 }
 
-function SearchProgress({ sessionId, onRetry }: { sessionId: string; onRetry: () => void }) {
+interface SearchProgressProps {
+  session: SearchSession;
+  onDone: (done: DoneEvent, ranWith: SearchSession) => void;
+  onRetry: () => void;
+}
+
+function SearchProgress({ session, onDone, onRetry }: SearchProgressProps) {
   const router = useRouter();
   const [progress, dispatch] = useReducer(reduce, START);
   const finished = useRef(false);
+  const handleDone = useEffectEvent((done: DoneEvent) => onDone(done, session));
+  const { sessionId } = session;
 
   useEffect(() => {
     if (finished.current) return;
     const controller = new AbortController();
+    let started = false;
     (async () => {
       try {
         for await (const event of searchProducts(sessionId, controller.signal)) {
-          if (event.type === "done") finished.current = true;
+          started = true;
+          if (event.type === "done") {
+            finished.current = true;
+            handleDone(event);
+            return;
+          }
           dispatch({ type: "event", event });
         }
       } catch (error) {
         if (isAbort(error)) return;
         finished.current = true;
-        dispatch({ type: "failed", message: errorMessage(error), retryable: canRetry(error) });
+        const stoppedEarly = started && error instanceof ApiError && error.kind === "network";
+        dispatch({ type: "failed", message: stoppedEarly ? text.stoppedEarly : errorMessage(error), retryable: canRetry(error) });
       }
     })();
     return () => controller.abort();
   }, [sessionId]);
 
-  const checking = progress.slots.length;
-  const passed = progress.slots.filter((slot) => slot.state === "pass").length;
-  const { done, error } = progress;
+  const { found, dropped, slots, error } = progress;
+  const checked = slots.filter((slot) => slot.state !== "checking").length;
+  const passed = slots.filter((slot) => slot.state === "pass").length;
 
   function startOver() {
-    sessionStore.set(null);
+    clearSearch();
     router.push("/");
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <div>
-        <h1 className="display text-[2.25rem] sm:text-[2.75rem]">{done ? text.doneTitle : text.title}</h1>
+        <h1 className="display text-[2.25rem] sm:text-[2.75rem]">{text.title}</h1>
         <p className="display mt-3 text-[1.5rem] font-semibold tabular-nums text-indigo" aria-hidden="true">
-          {progress.found === null ? text.starting : text.progress(progress.found, checking, done ? done.passed : passed)}
+          {found === null ? text.starting : text.progress(found, slots.length, passed)}
         </p>
+        {dropped > 0 ? <p className="mt-1 text-base text-ink-soft">{text.dropped(dropped)}</p> : null}
         <p role="status" aria-live="polite" className="sr-only">
-          {done ? text.summary(done.checked, done.passed) : progress.found !== null ? text.liveFound(progress.found) : text.starting}
+          {found === null ? text.starting : checked === 0 ? text.liveFound(found) : text.liveProgress(checked, slots.length, passed)}
         </p>
       </div>
 
-      {progress.slots.length > 0 ? (
+      {slots.length > 0 ? (
         <ul aria-label={text.slotsLabel} className="grid grid-cols-4 gap-2">
-          {progress.slots.map((slot, index) => (
-            <li
-              key={slot.productId}
-              className="slot flex h-14 items-center justify-center rounded-xl"
-              data-state={slot.state}
-            >
-              <span className="sr-only">{text.slotLabel(index + 1, text.slot[slot.state])}</span>
-              <SlotMark state={slot.state} />
+          {slots.map((slot) => (
+            <li key={slot.productId} className="check-slot" data-state={slot.state}>
+              {slot.thumb ? (
+                <Image src={slot.thumb} alt="" fill unoptimized sizes="25vw" className="object-cover" />
+              ) : (
+                <span className="flex h-full items-center justify-center text-line-strong">
+                  <PhotoIcon className="size-6" />
+                </span>
+              )}
+              <span className="sr-only">{text.slotLabel(slot.title, text.slot[slot.state])}</span>
+              {slot.state === "checking" ? null : (
+                <span className="verdict" data-state={slot.state} aria-hidden="true">
+                  <StatusIcon status={slot.state} className="size-[1.125rem]" />
+                </span>
+              )}
             </li>
           ))}
         </ul>
-      ) : null}
+      ) : error ? null : (
+        <div aria-hidden="true" className="grid grid-cols-4 gap-2">
+          {Array.from({ length: 8 }, (_, index) => (
+            <span key={index} className="aspect-[3/4] rounded-[0.875rem] bg-wash" />
+          ))}
+        </div>
+      )}
 
       {error ? (
         <div role="alert" className="panel p-5">
@@ -147,9 +204,7 @@ function SearchProgress({ sessionId, onRetry }: { sessionId: string; onRetry: ()
         </div>
       ) : null}
 
-      {done ? <Summary done={done} /> : null}
-
-      {done || error ? (
+      {error ? (
         <div className="flex flex-col gap-3">
           <Link href="/understood" className="btn btn-secondary w-full">
             {text.back}
@@ -160,51 +215,5 @@ function SearchProgress({ sessionId, onRetry }: { sessionId: string; onRetry: ()
         </div>
       ) : null}
     </div>
-  );
-}
-
-function SlotMark({ state }: { state: SlotState }) {
-  if (state === "pass") return <CheckIcon className="size-7" strokeWidth={3} />;
-  if (state === "fail") return <CloseIcon className="size-6" strokeWidth={2.5} />;
-  if (state === "unclear") return <QuestionIcon className="size-7" strokeWidth={2.5} />;
-  return <span className="slot-dot size-3 rounded-full bg-indigo" aria-hidden="true" />;
-}
-
-function Summary({ done }: { done: DoneEvent }) {
-  const rejected = Object.entries(done.rejected);
-  return (
-    <section className="flex flex-col gap-5">
-      <p className="text-[1.25rem] font-semibold">{text.summary(done.checked, done.passed)}</p>
-      {done.unclear > 0 ? <p className="text-ink-soft">{text.unclear(done.unclear)}</p> : null}
-
-      {done.tradeoffs.length > 0 ? (
-        <div>
-          <h2 className="eyebrow">{text.tradeoffsTitle}</h2>
-          <ul className="mt-2 flex flex-col gap-2">
-            {done.tradeoffs.map((tradeoff) => (
-              <li key={tradeoff.relax} className="panel flex items-center justify-between gap-3 p-4">
-                <span className="font-semibold">{tradeoffLabel(tradeoff)}</span>
-                <span className="tabular-nums text-ink-soft">{text.tradeoffMatches(tradeoff.matches)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {rejected.length > 0 ? (
-        <div>
-          <hr className="stitch" />
-          <h2 className="eyebrow pt-4">{text.rejectedTitle}</h2>
-          <dl className="mt-2 divide-y divide-line">
-            {rejected.map(([reason, count]) => (
-              <div key={reason} className="flex items-baseline justify-between gap-4 py-2.5">
-                <dt className="capitalize-first">{reason}</dt>
-                <dd className="font-display text-[1.25rem] font-semibold tabular-nums">{count}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ) : null}
-    </section>
   );
 }

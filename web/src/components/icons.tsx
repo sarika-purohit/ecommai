@@ -143,6 +143,65 @@ export function PersonIcon(props: IconProps) {
   );
 }
 
+export function HeartIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z" />
+    </Icon>
+  );
+}
+
+export function BookmarkIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6.5 4.5h11v16l-5.5-4-5.5 4z" />
+    </Icon>
+  );
+}
+
+export function InfoIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5.5M12 7.8h.01" />
+    </Icon>
+  );
+}
+
+export function ExternalIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M13.5 4.5h6v6M19.5 4.5l-8 8M17 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7H10" />
+    </Icon>
+  );
+}
+
+export function StoreIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 9.5l1.5-5h13L20 9.5M4 9.5h16M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0" />
+      <path d="M5.5 12.5v7h13v-7M10 19.5v-4h4v4" />
+    </Icon>
+  );
+}
+
+export function ShieldIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3.5l7 2.8v5.2c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6.3z" />
+      <path d="M12 8.5v4M12 15.5h.01" />
+    </Icon>
+  );
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 9.5l6 6 6-6" />
+    </Icon>
+  );
+}
+
 export function TagMark(props: IconProps) {
   return (
     <svg viewBox="0 0 32 20" width="32" height="20" aria-hidden="true" focusable="false" {...props}>

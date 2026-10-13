@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowLeftIcon, PersonIcon, TagMark } from "@/components/icons";
 import { signOut, useAuth } from "@/lib/auth";
-import { sessionStore } from "@/lib/session";
+import { clearSearch } from "@/lib/session";
 import { strings } from "@/lib/strings";
 
 interface AppHeaderProps {
@@ -61,7 +61,7 @@ function AccountMenu() {
 
   async function handleSignOut() {
     setOpen(false);
-    sessionStore.set(null);
+    clearSearch();
     await signOut();
   }
 
@@ -92,7 +92,10 @@ function AccountMenu() {
         ) : (
           <p className="font-semibold">{strings.account.demoUser}</p>
         )}
-        <button type="button" className="btn btn-secondary btn-small mt-3 w-full" onClick={() => void handleSignOut()}>
+        <Link href="/profile" className="btn btn-primary btn-small mt-3 w-full" onClick={() => setOpen(false)}>
+          {strings.account.profile}
+        </Link>
+        <button type="button" className="btn btn-secondary btn-small mt-2 w-full" onClick={() => void handleSignOut()}>
           {strings.account.signOut}
         </button>
       </div>

@@ -312,7 +312,7 @@ def search(
     almost = _cards(results.almost, products)
     rejected = Counter(reason for _, reason in dropped) + Counter(results.rejected)
     done = DoneEvent(
-        checked=results.checked,
+        checked=results.checked + len(dropped),
         passed=len(matches),
         unclear=len(almost),
         rejected=dict(rejected.most_common()),
