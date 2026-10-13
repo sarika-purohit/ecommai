@@ -41,6 +41,7 @@ from data_prep.embed import (
     read_optional,
     read_selected,
 )
+from data_prep.schemas import GROUPS_WITHOUT_COLOUR, colour_family
 from data_prep.simulate import ShopData
 
 CATALOGUE_COLUMNS = (
@@ -130,7 +131,7 @@ def build_product(product_id: str, inputs: Inputs, dimensions: int) -> Product:
             **{column: row.get(column) or None for column in CATALOGUE_COLUMNS},
             "brand": (real or {}).get("brand") or None,
             "description": product_description(enriched, real),
-            "attributes": product_attributes(enriched, real),
+            "attributes": with_colour(product_attributes(enriched, real), row),
             "catalogue_details": catalogue_details(real),
             "needs_review": (enriched or {}).get("needs_review") or [],
             **shop,
@@ -141,6 +142,14 @@ def build_product(product_id: str, inputs: Inputs, dimensions: int) -> Product:
             "embedding": embedding,
         }
     )
+
+
+def with_colour(attributes: dict[str, dict], row: dict) -> dict[str, dict]:
+    family = colour_family(row.get("baseColour"))
+    if family is None or row.get("group") in GROUPS_WITHOUT_COLOUR or "colour" in attributes:
+        return attributes
+    note = f"Catalogue colour: {row['baseColour']}"
+    return {**attributes, "colour": {"value": family, "confidence": 1.0, "note": note, "source": "catalogue"}}
 
 
 def firestore_document(product: Product) -> dict:

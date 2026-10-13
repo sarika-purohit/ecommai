@@ -417,9 +417,9 @@ KINDS: dict[str, ProblemKind] = {
         ProblemKind(
             name="colour_bleeds",
             attribute="colour_fastness",
-            value="poor",
+            value="fades",
             rule="is_not",
-            expected_value="poor",
+            expected_value="fades",
             shopper_says="colour doesn't run or fade",
             brief="The colour bleeds in the first wash and fades quickly.",
             keywords=("colour bled", "colour ran in the wash", "colour faded"),

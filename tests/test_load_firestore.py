@@ -129,7 +129,8 @@ def test_an_enriched_product_joins_every_input(inputs):
     )
     assert product.brand == "Fabindia"
     assert product.description == enriched["description"]
-    assert product.attributes == {name: Attribute(**a) for name, a in enriched["attributes"].items()}
+    colour = Attribute(value="white", confidence=1.0, note="Catalogue colour: White", source="catalogue")
+    assert product.attributes == {**{name: Attribute(**a) for name, a in enriched["attributes"].items()}, "colour": colour}
     assert product.needs_review == ["neckline"]
     assert product.catalogue_details["Body or Garment Size"] == "Garment Measurements in"
     assert product.catalogue_details["description"].startswith("Composition\nPrinted white kurta")
@@ -261,7 +262,7 @@ def test_main_loads_the_trial_and_checks_it(tmp_path, monkeypatch):
     assert db.data == {}
     assert load_firestore.main(args) == 0
     assert set(db.data["products_trial"]) == {"30763", "29493"}
-    assert db.data["products_trial"]["30763"]["attributes"] == {}, "no enrichment and no catalogue labels"
+    assert set(db.data["products_trial"]["30763"]["attributes"]) == {"colour"}, "only the catalogue colour"
     assert load_firestore.main(args + ["--check"]) == 0
     db.data["products_trial"]["29493"]["title"] = "changed"
     assert load_firestore.main(args + ["--check"]) == 1

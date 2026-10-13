@@ -871,6 +871,7 @@ Any detail can also be `unknown` when the photo and the real details don't show 
 - **polarised:** yes, no
 
 **Details for every group:**
+- **From the catalogue, for every group except watches** (watches use dial and strap colour): **colour**: black, white, grey, blue, green, red, pink, purple, yellow, orange, brown, beige, gold, silver, multi. It comes from the product's own catalogue colour, grouped into the names shoppers use: Navy Blue and Teal count as blue, Off White and Cream as white, Maroon as red, Olive as green, Khaki as beige.
 - **From shop data:** cod, returnable, exchange (yes or no).
 - **Only from reviews, never from photos:**
  - **size_fit:** true to size, runs small, runs large

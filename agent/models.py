@@ -60,6 +60,9 @@ class ShoppingBrief(BaseModel):
     reference_image_url: str | None = None
     language: str = "en"
     missing: list[str] = Field(default_factory=list)
+    not_checkable: list[str] = Field(
+        default_factory=list, description="Wishes we can't check yet, such as a brand; shown to the shopper"
+    )
     question: str | None = Field(default=None, description="At most one question, only when the answer changes the results")
 
     @field_validator("must_haves")

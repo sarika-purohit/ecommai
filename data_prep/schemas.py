@@ -99,6 +99,31 @@ SHOP_ATTRIBUTES: dict[str, list[str]] = {
     "exchange": ["yes", "no"],
 }
 
+# The product's own colour (the dataset's baseColour), grouped into the names shoppers use.
+COLOUR_FAMILIES: dict[str, list[str]] = {
+    "black": ["Black", "Charcoal"],
+    "white": ["White", "Off White", "Cream"],
+    "grey": ["Grey", "Grey Melange"],
+    "blue": ["Blue", "Navy Blue", "Turquoise Blue", "Teal"],
+    "green": ["Green", "Olive", "Sea Green"],
+    "red": ["Red", "Maroon", "Rust"],
+    "pink": ["Pink", "Magenta", "Rose", "Peach"],
+    "purple": ["Purple", "Lavender"],
+    "yellow": ["Yellow", "Mustard"],
+    "orange": ["Orange"],
+    "brown": ["Brown", "Coffee Brown", "Tan", "Bronze", "Copper"],
+    "beige": ["Beige", "Khaki", "Nude", "Taupe"],
+    "gold": ["Gold"],
+    "silver": ["Silver", "Steel", "Metallic"],
+    "multi": ["Multi"],
+}
+
+_BASE_COLOUR_TO_FAMILY = {c.casefold(): family for family, colours in COLOUR_FAMILIES.items() for c in colours}
+
+# Read from the product's catalogue fields, not from photos. Watches use dial_colour and strap_colour instead.
+CATALOGUE_ATTRIBUTES: dict[str, list[str]] = {"colour": list(COLOUR_FAMILIES)}
+GROUPS_WITHOUT_COLOUR = frozenset({"watches"})
+
 # Details that apply to every group but only reviews can show. Never noted from photos.
 REVIEW_ATTRIBUTES: dict[str, list[str]] = {
     "size_fit": ["true to size", "runs small", "runs large"],
@@ -112,8 +137,13 @@ def group_for(article_type: str) -> str | None:
     return ARTICLE_TYPE_TO_GROUP.get(article_type)
 
 
+def colour_family(base_colour: str | None) -> str | None:
+    return _BASE_COLOUR_TO_FAMILY.get((base_colour or "").strip().casefold())
+
+
 def attributes_for(group: str) -> dict[str, list[str]]:
-    return {**VOCABULARY[group], **SHOP_ATTRIBUTES, **REVIEW_ATTRIBUTES}
+    catalogue = {} if group in GROUPS_WITHOUT_COLOUR else CATALOGUE_ATTRIBUTES
+    return {**VOCABULARY[group], **catalogue, **SHOP_ATTRIBUTES, **REVIEW_ATTRIBUTES}
 
 
 def is_allowed(group: str, attribute: str, value: str) -> bool:

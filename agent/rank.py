@@ -178,6 +178,8 @@ def _nice_to_have_share(nice_to_haves: list[NiceToHave], product: Product) -> fl
 
 
 def _same_value(a: str | bool | float, b: str | bool | float) -> bool:
+    if b is True and isinstance(a, str):
+        return a.casefold() not in ("none", "no", "unknown")
     if isinstance(a, str) and isinstance(b, str):
         return a.casefold() == b.casefold()
     return a == b

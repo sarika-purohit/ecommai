@@ -1,11 +1,13 @@
 from data_prep.schemas import (
     ARTICLE_TYPE_TO_GROUP,
+    COLOUR_FAMILIES,
     GROUPS,
     REVIEW_ATTRIBUTES,
     SHOP_ATTRIBUTES,
     UNKNOWN,
     VOCABULARY,
     attributes_for,
+    colour_family,
     group_for,
     is_allowed,
 )
@@ -39,6 +41,20 @@ def test_shop_and_review_attributes_apply_to_every_group():
     for group in GROUPS:
         assert set(SHOP_ATTRIBUTES) <= set(attributes_for(group))
         assert set(REVIEW_ATTRIBUTES) <= set(attributes_for(group))
+
+
+def test_colour_applies_to_every_group_except_watches():
+    assert "colour" not in attributes_for("watches")
+    for group in GROUPS:
+        if group != "watches":
+            assert attributes_for(group)["colour"] == list(COLOUR_FAMILIES)
+
+
+def test_every_catalogue_colour_has_a_family():
+    catalogue = ["Black", "Navy Blue", "Off White", "Grey Melange", "Turquoise Blue", "Coffee Brown", "Sea Green", "Steel"]
+    assert all(colour_family(c) for c in catalogue)
+    assert colour_family("navy blue") == "blue"
+    assert colour_family("NA") is None and colour_family(None) is None
 
 
 def test_review_attributes_are_never_asked_of_photos():

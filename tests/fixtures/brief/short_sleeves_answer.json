@@ -1,0 +1,17 @@
+{
+  "category": "Kurtas",
+  "gender": "women",
+  "must_haves": [
+    {"said": "cotton", "detail": "fabric=cotton", "rule": "is"},
+    {"said": "pockets", "detail": "pockets=none", "rule": "is_not"},
+    {"said": "short sleeves", "detail": "sleeve_length=short", "rule": "is"}
+  ],
+  "nice_to_haves": [],
+  "not_checkable": [],
+  "budget_max_inr": 1200,
+  "deadline": {"kind": "keep", "days": 0, "weekday": "none", "next_week": false, "day": 0, "month": 0},
+  "size": "M",
+  "language": "en",
+  "question_about": "none",
+  "question": ""
+}
