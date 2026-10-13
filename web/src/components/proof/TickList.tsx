@@ -25,10 +25,12 @@ interface TickListProps {
   /** A live store's product: proof comes from the store's photo and description, never demo reviews. */
   live?: boolean;
   store?: string | null;
+  /** A page on another site, read by Gemini through Google: every proof is a quote from that page. */
+  fromWeb?: boolean;
 }
 
 /** The tick-list: one tag per must-have. Tapping one opens its proof underneath. */
-export function TickList({ ticks, brief, photo, live = false, store = null }: TickListProps) {
+export function TickList({ ticks, brief, photo, live = false, store = null, fromWeb = false }: TickListProps) {
   const [open, setOpen] = useState<string | null>(null);
   const proofId = useId();
   const openTick = ticks.find((tick) => tick.must_have_id === open) ?? null;
@@ -74,6 +76,7 @@ export function TickList({ ticks, brief, photo, live = false, store = null }: Ti
             photo={photo}
             live={live}
             store={store}
+            fromWeb={fromWeb}
           />
         ) : null}
       </div>
@@ -81,8 +84,15 @@ export function TickList({ ticks, brief, photo, live = false, store = null }: Ti
   );
 }
 
+interface Origin {
+  live: boolean;
+  store: string | null;
+  fromWeb: boolean;
+}
+
 /** Null when there's nothing to point at, e.g. a live store's general note on payment with no quote. */
-function sourceLine(evidence: Evidence, attribute: string | null, live: boolean, store: string | null): string | null {
+function sourceLine(evidence: Evidence, attribute: string | null, { live, store, fromWeb }: Origin): string | null {
+  if (fromWeb) return strings.web.proofSource;
   if (evidence.type === "image") return live ? text.fromStorePhoto : text.fromPhoto;
   if (evidence.type === "details" && live) return evidence.quote ? text.fromStoreDescription(store) : null;
   if (evidence.type === "details") return text.fromListing;
@@ -90,18 +100,16 @@ function sourceLine(evidence: Evidence, attribute: string | null, live: boolean,
   return attribute && SHOP_DETAILS.has(attribute) ? text.fromStore : text.fromNoted;
 }
 
-interface ProofProps {
+interface ProofProps extends Origin {
   tick: Tick;
   label: string;
   attribute: string | null;
   photo: string | null;
-  live: boolean;
-  store: string | null;
 }
 
-function Proof({ tick, label, attribute, photo, live, store }: ProofProps) {
+function Proof({ tick, label, attribute, photo, live, store, fromWeb }: ProofProps) {
   const { evidence } = tick;
-  const source = evidence ? sourceLine(evidence, attribute, live, store) : null;
+  const source = evidence ? sourceLine(evidence, attribute, { live, store, fromWeb }) : null;
   return (
     <section className="mt-3 rounded-2xl bg-paper p-4 ring-1 ring-line" aria-label={text.tick(label, strings.status[tick.status])}>
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">

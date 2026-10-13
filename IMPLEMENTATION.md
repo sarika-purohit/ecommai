@@ -648,7 +648,15 @@ Write `agent/learn.py`:
  - Shopify search, then a light quick check (price and size only), then the careful check on the store's photo and description (8 s deadline), then ranking and "what to give up".
  - Cash on delivery, returns and delivery dates become "check at the store's checkout" notes instead of blocking matches.
  - "Buy" opens the store's own checkout or product page.
-3. **`agent/web_search.py`:** one Gemini Flash call with Grounding with Google Search for the "On other sites" section. It keeps only links Google returned and passes Google's search chip HTML through unchanged.
+3. **`agent/web_search.py`** builds the "On other sites" section in two stages:
+ - **Stage 1:** Gemini Flash with Grounding with Google Search finds listings. It keeps only links Google returned and passes Google's search chip HTML through unchanged.
+ - **Stage 2:** Google's URL context tool reads up to 5 product pages, one Gemini call per page, in parallel. One call with 5 pages took 48 s. Gemini checks the must-haves with quotes from the page.
+ - **Code rules:**
+  - checks are kept only for pages Google confirms it read;
+  - a pass needs a quote, and fabric or see-through quotes must be about that detail;
+  - shop details are never decided here;
+  - nothing from the pages is stored.
+ - **Timing:** the section arrives after the main results (`done`, then `web`, within 25 s).
 4. **Shopify's terms:** we keep only product IDs and our verdicts, never the stores' data. Photos are linked, not copied. Store links are used as returned. Saved live checks expire after 24 hours (Firestore expiry policy on `checks.expires_at`).
 
 **Test it**
@@ -671,6 +679,13 @@ Write `agent/learn.py`:
 
 - **Indian stores only:** restricting to Indian stores matters. Without it, foreign stores appear with wrong rupee prices.
 - **Model choice:** the Google Search section stays on Flash, because Flash-Lite invented links.
+- **Other sites, pages read:**
+ - **Read:** brand and large stores (Sivasamgi, SpendMitra, The Time Square, Tata CLiQ, Pantaloons) and one Flipkart page. Example quotes: "100% Cotton", "featuring a single pocket", "Dial Color: Black", "Band Material: Stainless Steel".
+ - **Not read:** Ajio blocked one page; Myntra came back only as category pages; Google never returned Amazon.
+- **Other sites, limits:**
+ - **Time:** stage 1 takes 9–19 s. In one test, the main results came at 11 s and the other sites at 20 s.
+ - **Cost:** stage 1 runs 4–11 Google searches per request, so the search fee dominates: about US$0.06–0.15 per live search once the 5,000 free monthly searches are used. Stage 2 costs about US$0.004–0.012, though one very large page cost about US$0.21.
+ - **No photos:** product photos don't come back.
 - **Not built yet:**
  - photo search in live mode (Shopify supports image search);
  - live search inside the ADK agent and MCP tools.

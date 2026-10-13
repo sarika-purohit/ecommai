@@ -480,8 +480,10 @@ def web_findings() -> WebFindings:
     )
 
 
-def live(server: ShopifyServer | None = None, find: Callable | None = None) -> LiveServices:
-    return LiveServices(catalog=(server or ShopifyServer()).catalog(), find_on_web=find)
+def live(
+    server: ShopifyServer | None = None, find: Callable | None = None, read: Callable | None = None
+) -> LiveServices:
+    return LiveServices(catalog=(server or ShopifyServer()).catalog(), find_on_web=find, read_pages=read)
 
 
 def backend(

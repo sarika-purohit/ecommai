@@ -464,15 +464,15 @@ def run_live(brief=None, checker=None, server=None, find=None, svc=None, **kwarg
     return outcome, seen, svc
 
 
-def test_live_events_arrive_in_order_with_web_just_before_done_and_cards_per_the_contract():
+def test_live_events_arrive_in_order_with_web_after_done_and_cards_per_the_contract():
     checker = Checker({LILIUM_PHOTO: {"m1": "fail"}, JANASYA_PHOTO: {"m2": "unclear"}})
     outcome, seen, svc = run_live(kurta_brief(deadline_date=date(2026, 10, 16)), checker,
                                   find=lambda brief, text: web_findings())
 
-    assert kinds(seen) == ["candidates"] + ["checking"] * 3 + ["verified"] * 3 + ["web", "done"]
+    assert kinds(seen) == ["candidates"] + ["checking"] * 3 + ["verified"] * 3 + ["done", "web"]
     assert seen[0].model_dump() == {"count": 3, "dropped": 0}
     assert {event.product_id for event in seen[1:4]} == {G230, LILIUM, JANASYA}
-    web = seen[-2].model_dump()
+    web = seen[-1].model_dump()
     assert web == web_findings().model_dump()
 
     done = outcome.done
@@ -507,15 +507,75 @@ def test_the_live_quick_check_drops_prices_beyond_the_soft_limit_and_sizes_not_i
     assert outcome.done.rejected == {"size not in stock": 3} and outcome.done.matches == []
 
 
-def test_the_web_search_never_holds_up_the_results_and_its_failure_is_silent():
-    def slow(brief, text):
+def timed(events: list) -> tuple[list, list[float]]:
+    """An emit that also records when each event was sent."""
+    times: list[float] = []
+
+    def emit(event):
+        times.append(time.perf_counter())
+        events.append(event)
+
+    return emit, times
+
+
+def read_all(brief, findings, wait_s):
+    results = [result.model_copy(update={"read": True, "overall": "pass", "store": "Sangria"})
+               for result in findings.results]
+    return findings.model_copy(update={"results": results})
+
+
+def run_live_timed(**kwargs):
+    seen: list[workflow.Event] = []
+    emit, times = timed(seen)
+    started = time.perf_counter()
+    outcome = workflow.live_search(
+        kurta_brief(), query_text="cotton kurta with pockets", services=services(FakeDB()),
+        live=live(None, kwargs.pop("find", lambda brief, text: web_findings()), kwargs.pop("read", None)), emit=emit,
+        **kwargs,
+    )
+    return outcome, seen, [t - started for t in times], time.perf_counter() - started
+
+
+def test_the_checked_pages_come_in_the_web_event_after_done_and_then_the_stream_ends():
+    asked = []
+
+    def read(brief, findings, wait_s):
+        asked.append((brief.must_haves, wait_s))
+        return read_all(brief, findings, wait_s)
+
+    outcome, seen, _, _ = run_live_timed(read=read, web_wait_s=5)
+    assert kinds(seen)[-2:] == ["done", "web"]
+    assert [(r.read, r.overall, r.store) for r in seen[-1].results] == [(True, "pass", "Sangria")]
+    assert seen[-1].search_entry_point_html == web_findings().search_entry_point_html
+    [(must_haves, wait_s)] = asked
+    assert [m.id for m in must_haves] == ["m1", "m2"] and 0 < wait_s < 5
+    assert {"web_ms", "web_read_ms", "web_wait_ms"} <= set(outcome.timings)
+
+
+def test_a_slow_page_check_never_holds_up_done_and_its_links_still_come_unchecked():
+    def slow_read(brief, findings, wait_s):
+        time.sleep(2)
+        return read_all(brief, findings, wait_s)
+
+    _, seen, times, took = run_live_timed(read=slow_read, web_wait_s=0.5)
+    assert kinds(seen)[-2:] == ["done", "web"]
+    assert took < 1.5 and times[-1] - times[-2] < 1.0
+    assert seen[-1].results == web_findings().results and not seen[-1].results[0].read
+
+
+def test_a_failing_page_check_sends_the_links_and_a_failing_search_sends_nothing():
+    def broken(brief, findings, wait_s):
+        raise RuntimeError("url context down")
+
+    _, seen, _, _ = run_live_timed(read=broken)
+    assert kinds(seen)[-2:] == ["done", "web"] and seen[-1].results == web_findings().results
+
+    def slow_find(brief, text):
         time.sleep(2)
         return web_findings()
 
-    started = time.perf_counter()
-    _, seen, _ = run_live(find=slow, web_wait_s=0.1)
-    assert kinds(seen)[-1] == "done" and "web" not in kinds(seen)
-    assert time.perf_counter() - started < 1.5
+    _, seen, _, took = run_live_timed(find=slow_find, read=read_all, web_wait_s=0.2)
+    assert kinds(seen)[-1] == "done" and "web" not in kinds(seen) and took < 1.5
 
     _, seen, _ = run_live(find=lambda brief, text: None)
     assert "web" not in kinds(seen) and kinds(seen)[-1] == "done"

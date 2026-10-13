@@ -186,9 +186,13 @@ The shopper chooses where to look: **live stores** (the default) or **our demo c
  - **What can't be checked:** live stores share no reviews, so review-only details (like "true to size") stay "not sure". Cash on delivery, returns and delivery dates are shown as "check at the store's checkout" and never block a match. Shopify's own AI-written product notes are never accepted as proof.
  - **Buy:** opens the store's own page or checkout. We never handle payment.
  - **What we keep:** only product IDs and our verdicts, never the stores' data. Saved live checks expire after 24 hours.
-- **On other sites, through Google Search.** Gemini with Grounding with Google Search, an official Agent Platform feature, finds matching listings on Amazon.in, Flipkart, Myntra, Ajio, brand sites and more.
- - **How they're shown:** as plain links in their own section, marked "Found on Google, not checked by EcommAI", next to Google's search chip, shown exactly as Google provides it.
- - **What we don't do:** we never open those pages ourselves, and we only show links that Google actually returned.
+- **On other sites, through Google Search and Google's URL context tool.** Both are official Agent Platform features.
+ - **Finding listings:** Gemini with Grounding with Google Search finds matching listings on Flipkart, Ajio, Tata CLiQ, brand sites and more. We keep only links Google actually returned, and skip search and category pages.
+ - **Reading them:** Google's URL context tool then reads up to 5 of those product pages for Gemini. Google fetches each page; our servers never download it, and nothing from it is stored.
+ - **Checking:** Gemini checks each must-have against the page, quoting the words that prove it. A page gets ticks only if Google confirms it was actually read; a pass needs a quote, and fabric or see-through quotes must be about that detail.
+ - **How they're shown:** in their own section below our checked results, next to Google's search chip (shown exactly as Google provides it), marked "Checked from the store's page via Google. Weaker than our photo proof."
+ - **Pages that can't be read:** blocked or slow pages stay plain links marked "not checked".
+ - **Limits:** we can't re-check those quotes ourselves, because we never hold the page, and no product photos come back.
 
 ### The "I saw it" mode
 
@@ -716,7 +720,12 @@ class Verification(BaseModel):
 - `done { checked, passed, unclear, rejected, duplicates, tradeoffs, matches[], almost[], not_checkable[] }`. Each match is a result card: the ranked result (title, total price, delivery date, ticks, reason) plus brand, photo links, price, delivery fee, COD, returns, rating, `demo_data` and sizes in stock.
 - `error { message, retryable }`.
 - A `: ping` comment line goes out every 15 s to keep the connection open.
-- `web { results[{ title, url, site, price_text, snippet }], search_entry_point_html, queries }`: live searches only, sent before `done` when Google Search found listings on other sites. Links come only from Google's grounding sources, and the HTML is Google's own search chip, passed through unchanged.
+- `web { results[], search_entry_point_html, queries }`: live searches only. It's sent after `done`, within 25 s of the search starting, and then the stream closes.
+ - **What each result has:** `title`, `url`, `site`, `price_text`, `snippet`, `read`, `unread_reason` (`blocked`, `list_page` or none), `store`, `price_inr`, `image_url`, `sizes_in_stock`, `ticks` and `overall`.
+ - **Sources:** links come only from Google's grounding sources. Ticks come only from pages Google confirmed it read.
+ - **Order:** read and passing first, then read and not sure, then unread links, then read and failing.
+ - **If stage 2 is late or fails,** the event carries the links unchecked.
+ - **The HTML** is Google's own search chip, passed through unchanged.
 
 **Live products:**
 - **IDs:** Shopify IDs like `gid://shopify/p/<id>?shop=<store>`, so the app URL-encodes the whole ID. `GET /api/products/{id}` needs the `session_id` for them.

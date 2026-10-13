@@ -2,7 +2,7 @@
 // list shaped like a Grounding with Google Search answer, for the mock API.
 // Everything here stands in for server data, so it is not in the strings file.
 
-import type { Attribute, BoundingBox, Gender, Price, ProductGroup, WebResult } from "@/lib/types";
+import type { Attribute, BoundingBox, Gender, Price, ProductGroup, Status, Tick, WebResult } from "@/lib/types";
 
 export interface LiveProduct {
   /** A Shopify GID, as UCP gives it. */
@@ -171,38 +171,90 @@ export function shopifyPhoto(photo: string, width?: number): string {
 
 // ---------- "On other sites" ----------
 
-const WEB_PRICES: Record<string, [string | null, string | null, string | null]> = {
-  Kurtas: ["₹499 onwards", "₹389 onwards", null],
-  Watches: ["₹899 onwards", "₹649 onwards", null],
-  "Casual Shoes": ["₹699 onwards", "₹549 onwards", null],
+const WEB_PRICES: Record<string, [number, number, string | null]> = {
+  Kurtas: [899, 749, "₹499 onwards"],
+  Watches: [2499, 1899, "₹899 onwards"],
+  "Casual Shoes": [1299, 1099, "₹699 onwards"],
 };
+const WEB_SIZES: Record<string, string[]> = { Kurtas: ["S", "M", "L", "XL"], "Casual Shoes": ["UK 7", "UK 8", "UK 9"] };
 
-/** Listing pages on three big Indian shops for the query, as grounding tends to find them. */
-export function webResultsFor(query: string, category: string): WebResult[] {
-  const prices = WEB_PRICES[category] ?? [null, null, null];
+/** agent/web_search.py PAGE_NOTE, at the end of every note read from another site's page. */
+const PAGE_NOTE = "Read from the store's page by Gemini (via Google)";
+
+/** A must-have as the agent sends it to the page check: its id and the agent's label. */
+export interface WebMustHave {
+  id: string;
+  label: string;
+}
+
+function pageTick(mustHave: WebMustHave, status: Status, quote: string | null, note: string): Tick {
+  return {
+    must_have_id: mustHave.id,
+    label: mustHave.label,
+    status,
+    evidence: { type: "details", note: `${note} ${PAGE_NOTE}.`, quote, box_2d: null, agree: null, disagree: null },
+  };
+}
+
+function overallOf(ticks: Tick[]): Status {
+  if (ticks.some((tick) => tick.status === "fail")) return "fail";
+  return ticks.every((tick) => tick.status === "pass") ? "pass" : "unclear";
+}
+
+/**
+ * Three big Indian shops for the query, as the page check leaves them: a Myntra page read with every must-have
+ * on it, a Flipkart page read that doesn't mention the last one, and an Amazon page Google couldn't read.
+ */
+export function webResultsFor(query: string, category: string, mustHaves: WebMustHave[], photo: string | null): WebResult[] {
+  const [myntraPrice, flipkartPrice, amazonPrice] = WEB_PRICES[category] ?? [999, 899, null];
   const words = query.replace(/[₹,]/g, "").replace(/\s+/g, " ").trim();
   const title = words.replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const passing = mustHaves.map((m) => pageTick(m, "pass", `Product Details: ${m.label}`, "The product details say so."));
+  const unsure = mustHaves.map((m, index) =>
+    index === mustHaves.length - 1
+      ? pageTick(m, "unclear", null, "The page doesn’t say.")
+      : pageTick(m, "pass", `Specifications: ${m.label}`, "The specifications list it."),
+  );
+  const unchecked = { read: false, store: null, price_inr: null, image_url: null, sizes_in_stock: [], ticks: [], overall: null };
   return [
+    {
+      title: `Sangria ${title}`,
+      url: `https://www.myntra.com/${category.toLowerCase().replace(/\s+/g, "-")}?rawQuery=${encodeURIComponent(words)}`,
+      site: "myntra.com",
+      price_text: null,
+      snippet: null,
+      read: true,
+      unread_reason: null,
+      store: "Myntra",
+      price_inr: myntraPrice,
+      image_url: photo,
+      sizes_in_stock: WEB_SIZES[category] ?? [],
+      ticks: passing,
+      overall: overallOf(passing),
+    },
+    {
+      title: `Anouk ${title}`,
+      url: `https://www.flipkart.com/search?q=${encodeURIComponent(words)}`,
+      site: "flipkart.com",
+      price_text: null,
+      snippet: `Buy ${words} online at Flipkart.`,
+      read: true,
+      unread_reason: null,
+      store: "Flipkart",
+      price_inr: flipkartPrice,
+      image_url: null,
+      sizes_in_stock: (WEB_SIZES[category] ?? []).slice(1),
+      ticks: unsure,
+      overall: overallOf(unsure),
+    },
     {
       title: `Amazon.in: ${title}`,
       url: `https://www.amazon.in/s?k=${encodeURIComponent(words).replace(/%20/g, "+")}`,
       site: "amazon.in",
-      price_text: prices[0],
+      price_text: amazonPrice,
       snippet: `Shop ${words} at Amazon.in. Free delivery on eligible orders.`,
-    },
-    {
-      title: `${title} - Buy online at best prices in India | Flipkart`,
-      url: `https://www.flipkart.com/search?q=${encodeURIComponent(words)}`,
-      site: "flipkart.com",
-      price_text: prices[1],
-      snippet: `Buy ${words} online at Flipkart. Cash on delivery on most items.`,
-    },
-    {
-      title: `Buy ${title} Online in India | Myntra`,
-      url: `https://www.myntra.com/${category.toLowerCase().replace(/\s+/g, "-")}?rawQuery=${encodeURIComponent(words)}`,
-      site: "myntra.com",
-      price_text: prices[2],
-      snippet: null,
+      ...unchecked,
+      unread_reason: "blocked",
     },
   ];
 }

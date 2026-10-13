@@ -12,9 +12,11 @@ just one must-have (see `one_away`). `search` reports progress through `emit`, i
 
 `live_search` runs the same steps on live Shopify products (agent/sources/shopify.py) instead of our catalogue:
 find in Shopify's Global Catalog -> live_quick_check (budget limit, size) -> careful check of the photo and listing
--> rank -> what to give up. Alongside it, Gemini with Google Search looks for listings on other sites
-(agent/web_search.py); its `web {results, search_entry_point_html, queries}` event comes just before `done`, or not
-at all when it fails or isn't ready WEB_WAIT_S after the checks.
+-> rank -> what to give up. Alongside it, Gemini with Google Search looks for listings on other sites and has Google
+read their pages (agent/web_search.py). `done` goes out as soon as the main results are ready; the stream then
+stays open for `web {results, search_entry_point_html, queries}`, sent when the pages are checked or WEB_WAIT_S into
+the search, whichever is first. A late or failing page check sends the links Google Search found, unchecked; no
+`web` comes when the search itself found nothing or failed.
 
 One product's bad data never fails a search: it's logged and left out.
 
@@ -73,7 +75,8 @@ RETRY_CODES = {408, 429, 500, 502, 503, 504}
 MAX_BUDGET_INR = 10_00_000
 MAX_TEXT = briefs.MAX_REQUEST_CHARS
 LIVE_FETCH_LIMIT = shopify.SEARCH_LIMIT
-WEB_WAIT_S = 3.0
+WEB_WAIT_S = 25.0
+WEB_MARGIN_S = 0.5
 SIZES_WAIT_S = 1.5
 SIZE_LOOKUPS = 6
 LOOKUP_WORKERS = 3
@@ -174,19 +177,24 @@ class LiveCatalog(Protocol):
 
 
 WebFinder = Callable[[ShoppingBrief, str], WebFindings | None]
+PageReader = Callable[[ShoppingBrief, WebFindings, float], WebFindings]
 
 
 @dataclass
 class LiveServices:
     catalog: LiveCatalog
     find_on_web: WebFinder | None = None
+    read_pages: PageReader | None = None
 
 
 def default_live(services: Services) -> LiveServices:
     def find(brief: ShoppingBrief, text: str) -> WebFindings | None:
         return web_search.find_on_web(brief, text, client=services.check_client)
 
-    return LiveServices(catalog=shopify.Catalog(), find_on_web=find)
+    def read(brief: ShoppingBrief, findings: WebFindings, wait_s: float) -> WebFindings:
+        return web_search.read_pages(brief, findings, client=services.check_client, wait_s=wait_s)
+
+    return LiveServices(catalog=shopify.Catalog(), find_on_web=find, read_pages=read)
 
 
 class PhotoProblem(ValueError):
@@ -394,14 +402,17 @@ def live_search(
 ) -> SearchOutcome:
     """Steps 2 to 4 on live Shopify products, with listings on other sites alongside.
 
-    Raises only when the whole search fails, e.g. shopify.CatalogError when Shopify's catalog can't be reached.
+    Returns after the `web` event (at most `web_wait_s` into the search), so the stream ends with it. Raises only
+    when the whole search fails, e.g. shopify.CatalogError when Shopify's catalog can't be reached.
     """
     started = time.perf_counter()
     timings: dict[str, float] = {}
     brief, shop_notes = without_shop_details(brief)
     workers = ThreadPoolExecutor(max_workers=1 + LOOKUP_WORKERS, thread_name_prefix="live")
     try:
-        web = workers.submit(_timed, live.find_on_web, brief, query_text) if live.find_on_web else None
+        web = _OtherSites(live, deadline=started + web_wait_s) if live.find_on_web else None
+        if web is not None:
+            web.future = workers.submit(web.run, brief, query_text)
         clock = time.perf_counter()
         products = live.catalog.search(brief, query_text, LIVE_FETCH_LIMIT)
         timings["shopify_search_ms"] = _ms_since(clock)
@@ -445,7 +456,6 @@ def live_search(
         clock = time.perf_counter()
         shown = [result.product_id for result in [*results.matches, *results.almost]][:SIZE_LOOKUPS]
         lookups = {product_id: workers.submit(live.catalog.get_product, product_id, brief) for product_id in shown}
-        web_event = _web_event(web, web_wait_s, timings) if web is not None else None
         found = _with_live_sizes({candidate.product.id: candidate.product for candidate in candidates}, lookups,
                                  deadline=clock + SIZES_WAIT_S)
         timings["sizes_ms"] = _ms_since(clock)
@@ -463,14 +473,14 @@ def live_search(
             almost=almost,
             not_checkable=[*live_not_checkable(brief), *shop_notes],
         )
-        if web_event is not None:
-            emit(web_event)
         timings["total_ms"] = _ms_since(started)
+        emit(done)
+        if web is not None and (web_event := web.event(timings)) is not None:
+            emit(web_event)
         log.info(
             "live search %s: %d found, %d kept, %d dropped, %d checked, %d passed, %d unclear, ms %s",
             brief.category, len(products), len(pool), len(dropped), done.checked, done.passed, done.unclear, timings,
         )
-        emit(done)
         return SearchOutcome(done=done, timings=timings, live_ids=[card.product_id for card in [*matches, *almost]])
     finally:
         workers.shutdown(wait=False, cancel_futures=True)
@@ -504,29 +514,47 @@ def live_summary(done: DoneEvent) -> dict:
     return summary
 
 
-def _timed(find: WebFinder, brief: ShoppingBrief, text: str) -> tuple[WebFindings | None, float]:
-    clock = time.perf_counter()
-    return find(brief, text), _ms_since(clock)
+@dataclass
+class _OtherSites:
+    """'On other sites' in two stages, run alongside the live search: Google Search finds the links, then Google
+    reads their pages. `links` keeps the first stage's links, so a late or failing second stage still sends them."""
 
+    live: LiveServices
+    deadline: float
+    future: Future | None = None
+    links: WebFindings | None = None
+    search_ms: float | None = None
+    read_ms: float | None = None
 
-def _web_event(future: Future, wait_s: float, timings: dict[str, float]) -> WebEvent | None:
-    """The `web` event if the web search is done within wait_s; the main results never wait longer."""
-    clock = time.perf_counter()
-    try:
-        findings, took_ms = future.result(timeout=wait_s)
-    except FutureTimeout:
+    def run(self, brief: ShoppingBrief, text: str) -> WebFindings | None:
+        clock = time.perf_counter()
+        self.links = self.live.find_on_web(brief, text) if self.live.find_on_web else None
+        self.search_ms = _ms_since(clock)
+        if self.links is None or not self.links.results or self.live.read_pages is None:
+            return self.links
+        clock = time.perf_counter()
+        read = self.live.read_pages(brief, self.links, max(0.0, self.deadline - clock - WEB_MARGIN_S))
+        self.read_ms = _ms_since(clock)
+        return read
+
+    def event(self, timings: dict[str, float]) -> WebEvent | None:
+        """The `web` event once the pages are read, or at the deadline with what's there; None if nothing was found."""
+        clock = time.perf_counter()
+        try:
+            findings = self.future.result(timeout=max(0.0, self.deadline - clock)) if self.future else self.links
+        except FutureTimeout:
+            log.warning("other sites not read in time; sending the links found")
+            findings = self.links
+        except Exception:
+            log.exception("other sites failed; sending the links found")
+            findings = self.links
+        stages = (("web_ms", self.search_ms), ("web_read_ms", self.read_ms))
+        timings.update({name: ms for name, ms in stages if ms is not None})
         timings["web_wait_ms"] = _ms_since(clock)
-        log.warning("web search not ready %.1f s after the checks; left out", wait_s)
-        return None
-    except Exception:
-        log.exception("web search failed")
-        return None
-    timings["web_ms"] = took_ms
-    timings["web_wait_ms"] = _ms_since(clock)
-    if findings is None:
-        return None
-    return WebEvent(results=findings.results, search_entry_point_html=findings.search_entry_point_html,
-                    queries=findings.queries)
+        if findings is None:
+            return None
+        return WebEvent(results=findings.results, search_entry_point_html=findings.search_entry_point_html,
+                        queries=findings.queries)
 
 
 def _with_live_sizes(products: dict[str, Product], lookups: dict[str, Future], *, deadline: float) -> dict[str, Product]:

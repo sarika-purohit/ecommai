@@ -241,8 +241,18 @@ const en = {
   web: {
     title: "On other sites",
     note: "Found on Google – not checked by EcommAI",
+    readNote: "Found on Google. Checked from the store’s page via Google. Weaker than our photo proof.",
+    checking: "Checking other sites…",
     suggestions: "Google Search suggestions",
     detail: (site: string, price: string | null) => (price ? `${site} · ${price}` : site),
+    sizes: (sizes: string[]) => `In stock: ${sizes.join(", ")}`,
+    openOn: (site: string) => `Open on ${site}`,
+    proofSource: "From the store’s page, read via Google",
+    notRead: {
+      blocked: "Not checked (the site didn’t let us read it)",
+      list_page: "Not checked (it’s a page of many products)",
+      none: "Not checked",
+    },
   },
 
   card: {

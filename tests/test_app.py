@@ -475,15 +475,18 @@ def test_a_brief_is_live_unless_the_catalog_is_asked_for():
     assert client.post("/api/brief", json=LIVE_REQUEST | {"source": "web"}).status_code == 400
 
 
-def test_a_live_search_streams_the_web_event_before_done_and_keeps_no_shopify_data():
+def test_a_live_search_streams_done_then_the_web_event_last_and_keeps_no_shopify_data():
     client, wired, server = live_client()
     session_id = live_session(client)
     found = search(client, session_id)
     names = [name for name, _ in found]
-    assert names == ["candidates"] + ["checking"] * 3 + ["verified"] * 3 + ["web", "done"]
-    assert set(found[-2][1]) == {"results", "search_entry_point_html", "queries"}
-    assert set(found[-2][1]["results"][0]) == {"title", "url", "site", "price_text", "snippet"}
-    done = found[-1][1]
+    assert names == ["candidates"] + ["checking"] * 3 + ["verified"] * 3 + ["done", "web"]
+    assert set(found[-1][1]) == {"results", "search_entry_point_html", "queries"}
+    assert set(found[-1][1]["results"][0]) == {
+        "title", "url", "site", "price_text", "snippet", "read", "unread_reason", "store", "price_inr", "image_url",
+        "sizes_in_stock", "ticks", "overall",
+    }
+    done = found[-2][1]
     assert set(done) == DONE_FIELDS and done["passed"] == 3
     card = next(card for card in done["matches"] if card["product_id"] == G230)
     assert set(card) == CARD_FIELDS

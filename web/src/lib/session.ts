@@ -1,7 +1,7 @@
 "use client";
 
 import { tradeoffAttribute } from "@/lib/labels";
-import { storedValue } from "@/lib/stored";
+import { memoryValue, storedValue } from "@/lib/stored";
 import type {
   BriefChange,
   DoneEvent,
@@ -40,7 +40,7 @@ export interface StoredResults {
   brief: ShoppingBrief;
   source?: SearchSource;
   done: DoneEvent;
-  /** "On other sites", when grounding found anything. */
+  /** "On other sites", when grounding found anything. Arrives after `done`. */
   web?: WebEvent | null;
 }
 
@@ -57,6 +57,24 @@ export const sessionStore = storedValue<SearchSession>("ecommai.session", "sessi
 
 export const resultsStore = storedValue<StoredResults>("ecommai.results", "session");
 
+/** Which search run's stream is still open after `done`, waiting for "On other sites". Gone on reload. */
+export const webWaitStore = memoryValue<string>();
+
+export function runKey(run: { sessionId: string; searchRun: number }): string {
+  return `${run.sessionId}:${run.searchRun}`;
+}
+
+/** Adds a `web` event that arrived after `done` to the stored results, if they're still for that search run. */
+export function addWeb(run: { sessionId: string; searchRun: number }, web: WebEvent) {
+  const stored = resultsStore.get();
+  if (stored && runKey(stored) === runKey(run)) resultsStore.set({ ...stored, web });
+}
+
+/** Stops waiting for "On other sites" for this run, unless a newer run is already waiting. */
+export function stopWebWait(run: { sessionId: string; searchRun: number }) {
+  if (webWaitStore.get() === runKey(run)) webWaitStore.set(null);
+}
+
 /** Likes and saves sent this session, by product id, so the buttons stay pressed. */
 export const feedbackStore = storedValue<Record<string, FeedbackAction[]>>("ecommai.feedback", "session");
 
@@ -70,6 +88,7 @@ export function clearSearch() {
   sessionStore.set(null);
   resultsStore.set(null);
   feedbackStore.set(null);
+  webWaitStore.set(null);
 }
 
 export function openQuestion(session: SearchSession): string | null {

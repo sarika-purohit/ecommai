@@ -11,12 +11,24 @@ import { StatusIcon } from "@/components/proof/TickList";
 import { resultsSummary, ResultsView } from "@/components/results/ResultsView";
 import { ApiError, isAbort, searchProducts } from "@/lib/api";
 import { canRetry, errorMessage } from "@/lib/errors";
-import { clearSearch, resultsStore, sessionStore, sourceOf, type SearchSession } from "@/lib/session";
+import {
+  addWeb,
+  clearSearch,
+  resultsStore,
+  runKey,
+  sessionStore,
+  sourceOf,
+  stopWebWait,
+  webWaitStore,
+  type SearchSession,
+} from "@/lib/session";
 import { useIsClient } from "@/lib/stored";
 import { strings } from "@/lib/strings";
 import type { DoneEvent, SearchEvent, Status, WebEvent } from "@/lib/types";
 
 const text = strings.results;
+/** The agent sends "On other sites" within 25 s of the search starting; past this the stream is given up. */
+const WEB_WAIT_MS = 40_000;
 
 type SlotState = "checking" | Status;
 
@@ -112,41 +124,60 @@ interface SearchProgressProps {
   onRetry: () => void;
 }
 
+/**
+ * Reads the search stream. Once `done` arrives the results show, but the stream stays open for "On other sites":
+ * it outlives this component, so leaving the progress screen doesn't cut it off.
+ */
 function SearchProgress({ session, onDone, onRetry }: SearchProgressProps) {
   const router = useRouter();
   const [progress, dispatch] = useReducer(reduce, START);
   const finished = useRef(false);
-  const handleDone = useEffectEvent((done: DoneEvent, web: WebEvent | null) => onDone(done, web, session));
+  const handleDone = useEffectEvent((done: DoneEvent, web: WebEvent | null) => {
+    if (!web && sourceOf(session) === "live") webWaitStore.set(runKey(session));
+    onDone(done, web, session);
+  });
+  const handleLateWeb = useEffectEvent((web: WebEvent) => addWeb(session, web));
+  const handleClosed = useEffectEvent(() => stopWebWait(session));
   const { sessionId } = session;
 
   useEffect(() => {
     if (finished.current) return;
     const controller = new AbortController();
     let started = false;
+    let done = false;
+    let giveUp: ReturnType<typeof setTimeout> | undefined;
     let web: WebEvent | null = null;
     (async () => {
       try {
         for await (const event of searchProducts(sessionId, controller.signal)) {
           started = true;
           if (event.type === "web") {
-            web = event;
+            if (done) handleLateWeb(event);
+            else web = event;
             continue;
           }
           if (event.type === "done") {
             finished.current = true;
+            done = true;
+            giveUp = setTimeout(() => controller.abort(), WEB_WAIT_MS);
             handleDone(event, web);
-            return;
+            continue;
           }
           dispatch({ type: "event", event });
         }
       } catch (error) {
-        if (isAbort(error)) return;
+        if (done || isAbort(error)) return;
         finished.current = true;
         const stoppedEarly = started && error instanceof ApiError && error.kind === "network";
         dispatch({ type: "failed", message: stoppedEarly ? text.stoppedEarly : errorMessage(error), retryable: canRetry(error) });
+      } finally {
+        clearTimeout(giveUp);
+        if (done) handleClosed();
       }
     })();
-    return () => controller.abort();
+    return () => {
+      if (!done) controller.abort();
+    };
   }, [sessionId]);
 
   const { found, dropped, slots, error } = progress;

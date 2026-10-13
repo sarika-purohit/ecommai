@@ -81,3 +81,31 @@ export function storedValue<T>(key: string, kind: Area): StoredValue<T> {
 
   return { get, set, use };
 }
+
+/** A value kept only in this page's memory, for state that must not outlive it, like a stream still open. */
+export function memoryValue<T>(): StoredValue<T> {
+  const listeners = new Set<() => void>();
+  let value: T | null = null;
+
+  function set(next: T | null) {
+    value = next;
+    listeners.forEach((listener) => listener());
+  }
+
+  function subscribe(listener: () => void) {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }
+
+  function use(): T | null {
+    return useSyncExternalStore(
+      subscribe,
+      () => value,
+      () => null,
+    );
+  }
+
+  return { get: () => value, set, use };
+}

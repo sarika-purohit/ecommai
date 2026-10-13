@@ -950,14 +950,18 @@ function searchQuery(brief: ShoppingBrief): string {
   return parts.join(" ");
 }
 
-/** What Grounding with Google Search would find for the checklist on other shops. */
+/** What Grounding with Google Search would find for the checklist on other shops, after Google reads the pages. */
 function webFor(brief: ShoppingBrief): WebEvent {
   const query = searchQuery(brief);
   const fallback = `${brief.category.toLowerCase()} online india`;
   const queries = query === brief.category.toLowerCase() ? [fallback] : [query, fallback];
+  const mustHaves = brief.must_haves
+    .filter((m) => !SHOP_ATTRIBUTES.includes(m.attribute))
+    .map((m) => ({ id: m.id, label: agentLabel(m) }));
+  const photo = LIVE_PRODUCTS.find((product) => product.articleType === brief.category)?.photo ?? null;
   return {
     type: "web",
-    results: webResultsFor(query, brief.category),
+    results: webResultsFor(query, brief.category, mustHaves, photo),
     search_entry_point_html: searchEntryPointFor(queries),
     queries,
   };
@@ -1032,11 +1036,6 @@ export async function* streamSearch(sessionId: string, signal?: AbortSignal): As
       : null,
   });
 
-  if (source === "live") {
-    await sleep(250, signal);
-    yield webFor(brief);
-  }
-
   await sleep(300, signal);
   yield {
     type: "done",
@@ -1050,6 +1049,11 @@ export async function* streamSearch(sessionId: string, signal?: AbortSignal): As
     almost: ranked.almost,
     not_checkable: brief.not_checkable,
   };
+
+  if (source === "live") {
+    await sleep(2500, signal);
+    yield webFor(brief);
+  }
 }
 
 // ---------- Product page and checkout ----------

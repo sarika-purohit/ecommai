@@ -11,11 +11,13 @@ import { errorMessage } from "@/lib/errors";
 import { tradeoffLabel } from "@/lib/labels";
 import {
   clearSearch,
+  runKey,
   sameRule,
   sourceOf,
   sourceStore,
   tradeoffChanges,
   updateSession,
+  webWaitStore,
   type SearchSession,
   type StoredResults,
 } from "@/lib/session";
@@ -45,6 +47,7 @@ export function ResultsView({ session, results, focusHeading, onAnnounce }: Resu
   const nothing = done.passed === 0;
   const source = results.source ?? sourceOf(session);
   const otherSource: SearchSource = source === "live" ? "catalog" : "live";
+  const checkingWeb = webWaitStore.use() === runKey(results) && !results.web;
 
   useEffect(() => {
     if (focusHeading) heading.current?.focus();
@@ -147,7 +150,7 @@ export function ResultsView({ session, results, focusHeading, onAnnounce }: Resu
 
       <Rejected done={done} />
 
-      {results.web ? <OtherSites web={results.web} /> : null}
+      <OtherSites web={results.web ?? null} checking={checkingWeb} brief={brief} />
 
       <div className="flex flex-col gap-3">
         <Link href="/understood" className="btn btn-secondary w-full">

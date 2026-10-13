@@ -165,13 +165,35 @@ function withDoneDefaults(event: DoneEvent): DoneEvent {
   };
 }
 
-/** Drops results without a title or an http(s) link, so a bad link can never run script when tapped. */
+/**
+ * Drops results without a title or an http(s) link, so a bad link can never run script when tapped. Fills in
+ * the page-check fields an older agent leaves out; a photo must be an https link.
+ */
 function withWebDefaults(event: WebEvent): WebEvent {
   const results = (Array.isArray(event.results) ? event.results : []).flatMap((result): WebResult[] => {
     const url = webLink(result?.url);
     if (!url || !result.title) return [];
     const site = result.site || new URL(url).hostname.replace(/^www\./, "");
-    return [{ ...result, url, site, price_text: result.price_text || null, snippet: result.snippet || null }];
+    const read = result.read === true;
+    const ticks = read && Array.isArray(result.ticks) ? result.ticks : [];
+    const image = webLink(result.image_url);
+    return [
+      {
+        ...result,
+        url,
+        site,
+        price_text: result.price_text || null,
+        snippet: result.snippet || null,
+        read,
+        unread_reason: read ? null : (result.unread_reason ?? null),
+        store: result.store || null,
+        price_inr: typeof result.price_inr === "number" && result.price_inr > 0 ? result.price_inr : null,
+        image_url: image?.startsWith("https:") ? image : null,
+        sizes_in_stock: Array.isArray(result.sizes_in_stock) ? result.sizes_in_stock : [],
+        ticks,
+        overall: read ? (result.overall ?? null) : null,
+      },
+    ];
   });
   const html = event.search_entry_point_html;
   return {
@@ -198,24 +220,29 @@ function toSearchEvent(name: string, data: string): SearchEvent | null {
 }
 
 /**
- * POST /api/search: the live checking stream. Ends after a `done` event; an `error` event
- * becomes an ApiError carrying the agent's message. A stream that stops early is a network error.
+ * POST /api/search: the live checking stream, read until the agent closes it. `done` brings the main results;
+ * on live searches a `web` event follows it. Before `done`, an `error` event becomes an ApiError carrying the
+ * agent's message and a stream that stops is a network error. After `done` the results are in, so a dropped
+ * stream or a late error just ends it.
  */
 export async function* searchProducts(sessionId: string, signal?: AbortSignal): AsyncGenerator<SearchEvent> {
   const source = mockApi ? mockStream(sessionId, signal) : liveStream(sessionId, signal);
+  let done = false;
   try {
     for await (const event of source) {
       if (event.type === "error") {
+        if (done) return;
         throw new ApiError(event.retryable ? "server" : "badRequest", null, event.retryable, event.message);
       }
       yield event;
-      if (event.type === "done") return;
+      if (event.type === "done") done = true;
     }
   } catch (error) {
     if (isMockNotFound(error)) throw new ApiError("notFound", 404, false);
+    if (done && !isAbort(error)) return;
     throw error;
   }
-  throw new ApiError("network");
+  if (!done) throw new ApiError("network");
 }
 
 async function* mockStream(sessionId: string, signal?: AbortSignal): AsyncGenerator<SearchEvent> {

@@ -302,16 +302,36 @@ export interface DoneEvent {
   not_checkable: string[];
 }
 
-/** A page on another site that Grounding with Google Search found. We haven't checked it. */
+/** Why a page wasn't checked: Google couldn't read it, or it lists many products. Null when we didn't get to it. */
+export type UnreadReason = "blocked" | "list_page";
+
+/**
+ * A page on another site that Grounding with Google Search found (agent/web_search.py `WebResult`). When `read`,
+ * Gemini read it through Google's URL context tool and checked it against the checklist; otherwise it's a plain link.
+ */
 export interface WebResult {
   title: string;
+  /** Google's grounding link to the page. */
   url: string;
   site: string;
   price_text: string | null;
   snippet: string | null;
+  read: boolean;
+  unread_reason: UnreadReason | null;
+  store: string | null;
+  price_inr: number | null;
+  /** The store's own product photo, shown from the store's site. */
+  image_url: string | null;
+  sizes_in_stock: string[];
+  /** One per must-have (shop details excepted); proof is a quote from the page. Empty when not read. */
+  ticks: Tick[];
+  overall: Status | null;
 }
 
-/** The "On other sites" list, sent before `done` when grounding found anything. */
+/**
+ * The "On other sites" list, sent after `done` on live searches when Google Search found anything; the stream
+ * ends after it. Read and passing pages come first, then read and unclear, then plain links.
+ */
 export interface WebEvent {
   type: "web";
   results: WebResult[];
