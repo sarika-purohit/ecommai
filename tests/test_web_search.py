@@ -253,6 +253,28 @@ def test_the_careful_checks_quote_and_detail_word_rules_hold_for_pages():
     assert tick.evidence.note == f"{PAGE_NOTE}. (Not confirmed: nothing quoted from the page.)"
 
 
+@pytest.mark.parametrize("status", ["pass", "fail"])
+def test_a_colour_from_page_text_is_unclear_and_points_to_the_page(status):
+    navy = MustHave(id="m9", attribute="colour", rule="is", value="navy blue")
+    dial = MustHave(id="m8", attribute="dial_colour", rule="is", value="black")
+    answers = [web_search.PageCheck(must_have_id="m9", status=status, quote="Colour: Navy Blue", note="Navy."),
+               web_search.PageCheck(must_have_id="m8", status=status, quote="Dial colour: Black", note="Black.")]
+    ticks = web_search.page_ticks([navy, dial], answers)
+    assert [(tick.label, tick.status) for tick in ticks] == [("navy blue", "unclear"), ("black dial", "unclear")]
+    assert all(tick.evidence.note == web_search.COLOUR_NOTE == "Open the page to see the colour." for tick in ticks)
+    assert web_search.page_tick(navy, None).evidence.note == web_search.COLOUR_NOTE
+
+
+def test_colours_are_not_asked_of_the_page_but_still_get_a_tick():
+    navy = MustHave(id="m3", attribute="colour", rule="is", value="navy blue")
+    with_colour = brief().model_copy(update={"must_haves": [*brief().must_haves, navy]})
+    client = PageClient({MYNTRA: (SUCCESS, page_answer(MYNTRA, COTTON_AND_POCKETS))})
+    [result] = read(client, MYNTRA, the_brief=with_colour).results
+    assert [(tick.must_have_id, tick.status) for tick in result.ticks] == [("m1", "pass"), ("m2", "pass"),
+                                                                           ("m3", "unclear")]
+    assert result.overall == "unclear" and "m3" not in client.calls[0][1]
+
+
 def test_shop_details_are_never_decided_from_a_page():
     with_cod = brief().model_copy(update={"must_haves": [
         *brief().must_haves, MustHave(id="r1", attribute="cod", rule="present", value=True, from_rule=True)]})

@@ -24,6 +24,9 @@ def kurta_brief(*must_haves: MustHave) -> ShoppingBrief:
         (MustHave(id="m", attribute="frame_shape", rule="is", value="aviator"), "aviator frames"),
         (MustHave(id="m", attribute="usage", rule="is", value="office"), "for office"),
         (MustHave(id="m", attribute="colour", rule="is_not", value="black"), "not black"),
+        (MustHave(id="m", attribute="colour", rule="is", value="navy blue"), "navy blue"),
+        (MustHave(id="m", attribute="colour", rule="is", value="off-white"), "off-white"),
+        (MustHave(id="m", attribute="colour", rule="is_not", value="mustard"), "not mustard"),
         (MustHave(id="m", attribute="pockets", rule="is_not", value="none"), "pockets"),
         (MustHave(id="m", attribute="size_fit", rule="is", value="true to size"), "true to size"),
         (MustHave(id="m", attribute="fabric", rule="is_not", value="polyester"), "not polyester"),
@@ -47,6 +50,8 @@ def test_label(must_have, chip):
     [
         (MustHave(id="m", attribute="pockets", rule="present", value=True), "no pockets"),
         (MustHave(id="m", attribute="fabric", rule="is", value="cotton"), "not cotton"),
+        (MustHave(id="m", attribute="colour", rule="is", value="navy blue"), "not navy blue"),
+        (MustHave(id="m", attribute="colour", rule="is_not", value="sky blue"), "sky blue"),
         (MustHave(id="m", attribute="sleeve_length", rule="is", value="three-quarter"), "not three-quarter sleeves"),
         (MustHave(id="m", attribute="pockets", rule="is", value="chest"), "no chest pocket"),
         (MustHave(id="m", attribute="pockets", rule="is", value="none"), "has pockets"),

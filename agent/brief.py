@@ -401,13 +401,25 @@ def _unique(items: Iterable[Item]) -> list[Item]:
     return list(dict.fromkeys(items))
 
 
+def _is_colour(item: Item) -> bool:
+    return item.attribute == "colour" and item.rule == "is" and isinstance(item.value, str)
+
+
+def without_covered_families(items: Sequence[Item]) -> list[Item]:
+    """'navy blue' already says blue: a colour family next to one of its own shades is left out."""
+    shades = [str(item.value) for item in items if _is_colour(item) and schemas.is_shade(str(item.value))]
+    families = {schemas.family_of(shade) for shade in shades}
+    return [item for item in items if not (_is_colour(item) and item.value in families)]
+
+
 def settle_must_haves(group: str, items: Sequence[Item]) -> tuple[list[Item], list[Item], list[str]]:
     """Must-haves without repeats or contradictions, plus the either-or ones moved to nice-to-haves.
 
     Two "is" values on one detail ("cotton or linen") mean either will do, so both become nice-to-haves.
+    A colour family next to one of its own shades isn't an either-or: the shade is kept.
     A must-have no product could meet together with an earlier one is dropped.
     """
-    unique = _unique(items)
+    unique = _unique(without_covered_families(items))
     is_values: dict[str, set[str | bool]] = {}
     for item in unique:
         if item.rule == "is":
@@ -608,12 +620,22 @@ def vocabulary_text() -> str:
         lines.append("")
     without = ", ".join(sorted(schemas.GROUPS_WITHOUT_COLOUR))
     lines.append(f"### every group except {without}, the product's own colour")
-    lines += [f"- {attribute}: {', '.join(values)}" for attribute, values in schemas.CATALOGUE_ATTRIBUTES.items()]
+    lines.append(f"- colour: {', '.join(schemas.COLOUR_FAMILIES)}")
+    lines.append(f"- colour shades, by family: {shades_text()}")
+    words = ", ".join(f"{word} → {shade}" for word, shade in schemas.SHADE_WORDS.items())
+    lines.append(f"- other words for those shades: {words}")
     lines += ["", "### every group, from the shop's data"]
     lines += [f"- {attribute}: {', '.join(values)}" for attribute, values in schemas.SHOP_ATTRIBUTES.items()]
     lines += ["", "### every group, only from reviews"]
     lines += [f"- {attribute}: {', '.join(values)}" for attribute, values in schemas.REVIEW_ATTRIBUTES.items()]
     return "\n".join(lines)
+
+
+def shades_text() -> str:
+    by_family: dict[str, list[str]] = {}
+    for shade, family in schemas.COLOUR_SHADES.items():
+        by_family.setdefault(family, []).append(shade)
+    return "; ".join(f"{family}: {', '.join(shades)}" for family, shades in by_family.items())
 
 
 @cache

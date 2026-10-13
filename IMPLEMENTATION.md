@@ -682,6 +682,16 @@ Write `agent/learn.py`:
 - **Other sites, pages read:**
  - **Read:** brand and large stores (Sivasamgi, SpendMitra, The Time Square, Tata CLiQ, Pantaloons) and one Flipkart page. Example quotes: "100% Cotton", "featuring a single pocket", "Dial Color: Black", "Band Material: Stainless Steel".
  - **Not read:** Ajio blocked one page; Myntra came back only as category pages; Google never returned Amazon.
+- **Colour fix (after a real phone test):** a "navy blue linen shirt" search showed sky-blue shirts and a mint shirt titled "Light Blue", all marked "Blue ✓".
+ - **The cause:** the checklist reduced "navy blue" to "blue", and the check trusted the title over the photo.
+ - **The fix:**
+  - shades are kept (about 38, with Hinglish and Hindi words);
+  - colours pass only on photo evidence;
+  - saved text-only colour passes come back "not sure" when read;
+  - live saved checks moved to version `v2-live3`;
+  - other sites never pass a colour.
+ - **The re-test:** the navy search returned 5 shirts that are navy by eye. Sky-blue, mint and white-with-navy-stripe shirts were rejected with the colour seen.
+ - **Still weak:** borderline shades. Two "sky blue" matches lean aqua.
 - **Other sites, limits:**
  - **Time:** stage 1 takes 9–19 s. In one test, the main results came at 11 s and the other sites at 20 s.
  - **Cost:** stage 1 runs 4–11 Google searches per request, so the search fee dominates: about US$0.06–0.15 per live search once the 5,000 free monthly searches are used. Stage 2 costs about US$0.004–0.012, though one very large page cost about US$0.21.

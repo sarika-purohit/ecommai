@@ -167,6 +167,14 @@ def test_the_prompt_lists_every_group_with_its_details():
     assert f"- colour: {', '.join(schemas.COLOUR_FAMILIES)}" in prompt
 
 
+def test_the_prompt_lists_every_shade_by_family_and_the_other_words_for_them():
+    prompt = system_prompt()
+    shades = prompt.split("- colour shades, by family: ", 1)[1].split("\n", 1)[0]
+    assert "blue: navy blue, dark blue, royal blue" in shades and "green: mint green, sea green" in shades
+    assert all(shade in shades for shade in schemas.COLOUR_SHADES)
+    assert "navy → navy blue" in prompt and "aasmani → sky blue" in prompt and "mehroon → maroon" in prompt
+
+
 # ---------- Standard forms ----------
 
 
@@ -247,6 +255,38 @@ def test_colour_is_a_detail_of_every_group_except_watches():
     assert items == [Item("colour", "is", "white"), Item("colour", "is_not", "black")] and dropped == []
     items, dropped = read_wishes("Watches", [Wish(detail="colour=gold", rule="is")])
     assert items == [] and dropped == ["'colour=gold' isn't a detail of Watches"]
+
+
+def test_a_shade_stays_the_shoppers_shade_and_a_plain_colour_stays_the_family():
+    items, dropped = read_wishes("Shirts", [Wish(detail="colour=navy blue", rule="is"),
+                                            Wish(detail="colour=sky blue", rule="is_not")])
+    assert items == [Item("colour", "is", "navy blue"), Item("colour", "is_not", "sky blue")] and dropped == []
+    brief = built(gemini_answer("Shirts", must=[("colour=navy blue", "is"), ("fabric=linen", "is")])).brief
+    assert triples(brief) == [("colour", "is", "navy blue"), ("fabric", "is", "linen")]
+    assert [label(m) for m in brief.must_haves] == ["navy blue", "linen"] and brief.not_checkable == []
+    plain = built(gemini_answer("Shirts", must=[("colour=blue", "is")])).brief
+    assert triples(plain) == [("colour", "is", "blue")]
+
+
+def test_a_family_next_to_its_own_shade_gives_way_to_the_shade():
+    both = [Item("colour", "is", "blue"), Item("colour", "is", "navy blue"), Item("fabric", "is", "linen")]
+    must, either, dropped = settle_must_haves("tops", both)
+    assert must == [Item("colour", "is", "navy blue"), Item("fabric", "is", "linen")] and either == [] and not dropped
+    other_family = [Item("colour", "is", "black"), Item("colour", "is", "navy blue")]
+    must, either, _ = settle_must_haves("tops", other_family)
+    assert must == [] and either == other_family
+
+
+def test_shade_and_family_must_haves_have_different_saved_check_keys():
+    assert Item("colour", "is", "navy blue").key() == "colour__is__navy-blue"
+    assert Item("colour", "is", "navy blue").key() != Item("colour", "is", "blue").key()
+
+
+def test_an_edit_shows_a_shade_as_written():
+    start = ShoppingBrief(category="Shirts", must_haves=[MustHave(id="m1", attribute="colour", rule="is",
+                                                                  value="navy blue")])
+    message = change_message(start, "cheaper", today=TUESDAY)
+    assert '{"detail": "colour=navy blue", "rule": "is"}' in message
 
 
 def test_the_same_pair_is_kept_for_the_group_it_belongs_to():

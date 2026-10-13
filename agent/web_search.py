@@ -14,6 +14,8 @@ These rules hold in code, whatever Gemini answers:
 - a page keeps its checks only if url_context_metadata says Google retrieved that URL; otherwise it stays a link;
 - a pass or fail needs a quote from the page, and text that talks to an AI never counts;
 - a pass on fabric, sheerness or a review-only detail must quote words about that detail (verify.py's rules);
+- colours and shades are never decided here: we don't see the photo, and page text can name the wrong colour, so
+  they stay unclear with COLOUR_NOTE;
 - shop details (cod, returns, exchange) are never decided here: live searches turn them into checkout notes.
 
 One call per page rather than one for all: pages differ widely (measured: 1k to 277k tool tokens, 2 to 30 s), and
@@ -48,6 +50,7 @@ from agent.models import Evidence, MustHave, ShoppingBrief, Status
 from agent.rank import Tick, rupees
 from agent.rules import label
 from agent.sources.shopify import CATEGORY_WORDS, GENDER_WORDS
+from data_prep import schemas
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +75,7 @@ READ_MAX_OUTPUT_TOKENS = 2048
 RESOLVE_TIMEOUT_S = 3.0
 REDIRECT_HOST = "vertexaisearch.cloud.google.com"
 PAGE_NOTE = "Read from the store's page by Gemini (via Google)"
+COLOUR_NOTE = "Open the page to see the colour."
 SITE_KINDS = ("amazon.in", "flipkart.com", "myntra.com", "ajio.com")
 OTHER_SITES = "brand"
 # Big stores' product pages have a recognisable path; anything else on them is a search or category page.
@@ -480,6 +484,8 @@ def page_note(said: str, reason: str | None) -> str:
 def page_tick(must_have: MustHave, answer: PageCheck | None) -> Tick:
     """One must-have decided from the page, with the code rules applied; no answer is unclear with nothing to show."""
     tick = Tick(must_have_id=must_have.id, label=label(must_have), status="unclear")
+    if must_have.attribute in schemas.COLOUR_DETAILS:
+        return tick.model_copy(update={"evidence": Evidence(type="details", note=COLOUR_NOTE)})
     if answer is None:
         return tick
     quote = page_text(answer.quote or "", QUOTE_LIMIT) or None
@@ -580,6 +586,7 @@ def read_pages(
     model = model or read_model()
     stats = stats if stats is not None else WebStats()
     must_haves = [m for m in brief.must_haves if m.attribute not in verify.SHOP_DETAILS]
+    asked = [m for m in must_haves if m.attribute not in schemas.COLOUR_DETAILS]
     results = list(findings.results)
     if not results:
         return findings
@@ -589,7 +596,7 @@ def read_pages(
         pages = list(pool.map(resolve, [result.url for result in results]))
         listed = [list_page(page) for page in pages]
         chosen = [index for index, is_list in enumerate(listed) if not is_list][:MAX_PAGES]
-        futures = {i: pool.submit(read_page, client, model, brief, pages[i], must_haves, stats) for i in chosen}
+        futures = {i: pool.submit(read_page, client, model, brief, pages[i], asked, stats) for i in chosen}
         wait(futures.values(), timeout=max(0.0, wait_s - (time.perf_counter() - started)))
         found = [_outcome(result, listed[i], futures.get(i), must_haves) for i, result in enumerate(results)]
     except Exception as error:

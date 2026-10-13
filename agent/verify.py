@@ -8,6 +8,8 @@ code, whatever Gemini answers:
 - a details or review quote must really appear in the details or the reviews, otherwise the check is unclear;
 - review-only details (size fit, durability, colour fastness, colour match) pass or fail only from reviews, and
   sheerness and fabric never pass from the photo or from details an AI read from the photo;
+- colour details (the product's colour or shade, dial, strap, sole and lens colour, the denim wash) pass only from
+  the photo: titles and descriptions can name the wrong colour, so a pass from text is unclear;
 - a pass on sheerness, fabric or a review-only detail must quote words about that detail;
 - reviews flagged by Model Armor, or that talk to an AI or give instructions, never count as evidence;
 - one review never outweighs the majority: a pass needs at least 3 agreeing reviews for every one that disagrees,
@@ -16,7 +18,8 @@ code, whatever Gemini answers:
 - a photo box must be a valid [ymin, xmin, ymax, xmax] on 0-1000, otherwise it's dropped.
 
 Every result is saved in the Firestore `checks` collection under f"{product_id}__{must_have.key()}", so a repeated
-check is instant. A product whose call keeps failing comes back all unclear with the reason, and isn't saved.
+check is instant. A saved pass the rules above would not accept now comes back unclear, without a Gemini call. A
+product whose call keeps failing comes back all unclear with the reason, and isn't saved.
 
 Live Shopify products (source 'shopify') have no reviews and no saved details. Their title, store and description
 are the store's listing (Shopify marks the description as possibly enriched; in practice it carries the store's own
@@ -62,10 +65,12 @@ from data_prep import schemas
 PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "verify.md"
 FLASH_MODEL = "gemini-3.8-flash"
 LITE_MODEL = "gemini-3.5-flash-lite"
-# Bump when the prompt or the rules below change, so results saved by an older version aren't reused.
+# Bump when the prompt or the rules below change, so results saved by an older version aren't reused. A new code
+# rule that only rejects saved passes needs no bump: check_from_doc applies it on read.
 VERSION = "v2"
-# Bump the suffix when only the live listing (live_listing) changes, so the catalogue's saved results stay.
-LIVE_VERSION = f"{VERSION}-live1"
+# Bump the suffix to drop only the live results (they expire in a day anyway), so the catalogue's saved results stay.
+# live3: colours and shades judged from the photo only, by the main colour.
+LIVE_VERSION = f"{VERSION}-live3"
 DEFAULT_COLLECTION = "checks"
 DEFAULT_PARALLEL = 12
 THINKING_LEVEL = "low"
@@ -94,6 +99,10 @@ NOISE_LABELS = {"Body or Garment Size", "Wash Care", "Multipack Set", "Warranty"
 SHOP_DETAILS = frozenset(schemas.SHOP_ATTRIBUTES)
 REVIEW_ONLY = frozenset(schemas.REVIEW_ATTRIBUTES)
 NOT_FROM_PHOTO = REVIEW_ONLY | {"sheerness", "fabric"}
+PHOTO_ONLY = schemas.COLOUR_DETAILS
+NO_PHOTO_COLOUR = "only the photo can show the colour"
+MAIN_COLOUR = ("Judge the main colour, the one covering most of the product: stripes, checks or a print in a colour "
+               "don't make a product of another base colour that colour")
 REVIEWS_PER_DISAGREEMENT = 3
 # A pass on these must quote words about the detail itself: "100% cotton" proves nothing about sheerness.
 TOPIC_WORDS = {
@@ -356,7 +365,24 @@ def where_to_check(attribute: str) -> str:
         return "reviews only (never the photo)"
     if attribute in NOT_FROM_PHOTO:
         return "the seller's details or reviews (not the photo)"
+    if attribute in PHOTO_ONLY:
+        return "the photo only (the title and description can name the wrong colour)"
     return "the photo first, or the details or reviews"
+
+
+def colour_hint(value: str) -> str:
+    """What a colour family or shade covers, so the photo is judged against the right range."""
+    family = schemas.family_of(value)
+    if family is None:
+        return MAIN_COLOUR
+    if not schemas.is_shade(value):
+        shades = [shade for shade, of in schemas.COLOUR_SHADES.items() if of == family]
+        covers = f"{family} is a colour family: any shade of it counts" + (f" ({', '.join(shades)})" if shades else "")
+    else:
+        hint = schemas.SHADE_HINTS.get(value)
+        covers = f"{value} is a shade of {family}" + (f": {hint}" if hint else "")
+        covers += f"; other shades of {family} don't count"
+    return f"{covers}. {MAIN_COLOUR}"
 
 
 def rule_text(must_have: MustHave) -> str:
@@ -377,7 +403,9 @@ def rule_text(must_have: MustHave) -> str:
 
 def must_have_line(must_have: MustHave, group: str) -> str:
     parts = [f"- {must_have.id}: {rule_text(must_have)}", f'shopper\'s chip: "{clean(label(must_have))}"']
-    if values := schemas.attributes_for(group).get(must_have.attribute):
+    if must_have.attribute == "colour" and isinstance(must_have.value, str):
+        parts.append(colour_hint(must_have.value))
+    elif values := schemas.attributes_for(group).get(must_have.attribute):
         hint = schemas.VALUE_HINTS.get((group, must_have.attribute))
         parts.append("values: " + ", ".join(values) + (f" ({hint})" if hint else ""))
     parts.append(f"check from: {where_to_check(must_have.attribute)}")
@@ -514,9 +542,17 @@ def saved_verdict(must_have: MustHave, value: str | bool | float) -> Status | No
         wanted = must_have.value == (must_have.rule == "present")
         return "pass" if has == wanted else "fail"
     if must_have.rule in ("is", "is_not"):
-        same = text == value_text(must_have.value).casefold()
+        wanted_text = value_text(must_have.value).casefold()
+        same = schemas.colour_within(text, wanted_text) if must_have.attribute == "colour" else text == wanted_text
+        if same is None:
+            return None
         return "pass" if same == (must_have.rule == "is") else "fail"
     return None
+
+
+def colour_without_photo(attribute: str, status: str, kind: str | None) -> bool:
+    """A colour pass that didn't come from the photo."""
+    return status == "pass" and attribute in PHOTO_ONLY and kind != "image"
 
 
 def fabric_named(must_have: MustHave, quote: str) -> bool:
@@ -606,6 +642,8 @@ class _Judge:
             self.downgrade("no evidence")
         if self.decisive and attribute in REVIEW_ONLY and self.kind != "reviews":
             self.downgrade("only reviews can show this")
+        if colour_without_photo(attribute, self.status, self.kind):
+            self.downgrade(NO_PHOTO_COLOUR)
         getattr(self, f"_{self.kind}")()
         if self.kind != "reviews":
             self._reviews_against_pass()
@@ -667,7 +705,9 @@ class _Judge:
         if self.status == "pass" and name in NOT_FROM_PHOTO and saved.source != "catalogue":
             self.downgrade("an AI reading of the photo can't show this")
         verdict = saved_verdict(self.must_have, saved.value)
-        if self.decisive and verdict is not None and verdict != self.status:
+        if self.decisive and verdict is None:
+            self.downgrade("the saved detail can't settle this")
+        elif self.decisive and verdict != self.status:
             self.downgrade("the saved detail says otherwise")
 
     def _review_numbers(self, numbers: list[int]) -> set[int]:
@@ -866,6 +906,8 @@ def saved_problem(doc: dict, check: Check, must_have: MustHave, product: Product
     evidence = check.evidence
     if check.status != "pass" or evidence is None:
         return None
+    if colour_without_photo(must_have.attribute, check.status, evidence.type):
+        return NO_PHOTO_COLOUR
     if must_have.attribute == "fabric" and not fabric_named(must_have, evidence.quote or ""):
         return "nothing quoted names the fabric"
     denying = denying_reviews(must_have, listing_for(product).reviews)
@@ -1270,6 +1312,13 @@ def gender_matches(brief: ShoppingBrief, product: Product) -> bool:
     return brief.gender is None or product.gender in (brief.gender, "unisex")
 
 
+def still_usable(doc: dict) -> bool:
+    """A saved catalogue check a precheck needn't redo: this version, and not a colour pass without the photo."""
+    kind = (doc.get("evidence") or {}).get("type")
+    return doc.get("version") == VERSION and not colour_without_photo(
+        str(doc.get("attribute")), str(doc.get("status")), kind)
+
+
 def precheck_plans(briefs: Sequence[ShoppingBrief], products: Iterable[Product], saved: set[str]) -> dict[str, tuple[Product, list[MustHave]]]:
     """For every product, the must-haves from matching briefs that have no saved result yet, one line per product."""
     wanted: dict[str, dict[str, MustHave]] = {}
@@ -1302,7 +1351,7 @@ def run_precheck(args: argparse.Namespace, run_job: Callable[..., dict] | None =
     candidates = [
         doc_id(p.id, m) for p in products.values() for b in briefs if p.article_type == b.category for m in b.must_haves
     ]
-    saved = {key for key, doc in cache.get_many(sorted(set(candidates))).items() if doc.get("version") == VERSION}
+    saved = {key for key, doc in cache.get_many(sorted(set(candidates))).items() if still_usable(doc)}
     plans = precheck_plans(briefs, products.values(), saved)
     if args.limit is not None:
         plans = dict(list(plans.items())[: args.limit])

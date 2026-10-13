@@ -827,3 +827,138 @@ def test_a_live_photo_is_read_from_its_link_and_never_downloaded():
     assert fetched == []
     part = verify.photo_part(product)
     assert part.file_data.file_uri == "https://cdn.shopify.com/s/files/1/0843/4650/3471/files/13.webp?width=1000"
+
+
+# ---------- Colours come from the photo ----------
+
+NAVY = MustHave(id="m9", attribute="colour", rule="is", value="navy blue")
+BLUE = MustHave(id="m9", attribute="colour", rule="is", value="blue")
+GARMENT = [80, 150, 950, 850]
+MINT_SHIRT = "Men's Light Blue Linen Blend Full Sleeve Relaxed Fit Mandarin Collar Casual Solid Shirt"
+
+
+def shirt(title: str = MINT_SHIRT, **fields) -> Product:
+    return live_product(title=title, articleType="Shirts", gender="men", description=f"{title}. 60% linen.", **fields)
+
+
+def catalogue_shirt(colour: str = "blue", base: str = "Navy Blue") -> Product:
+    saved = Attribute(value=colour, confidence=1.0, note=f"Catalogue colour: {base}", source="catalogue")
+    return make_product(articleType="Shirts", baseColour=base, attributes={"colour": saved})
+
+
+@pytest.mark.parametrize("must_have", [NAVY, BLUE, MustHave(id="m9", attribute="colour", rule="is_not", value="black")])
+def test_a_colour_pass_from_the_title_or_description_is_unclear(must_have):
+    decided = judge(answer("m9", "pass", "details", "The title says light blue", quote="Light Blue Linen Blend"),
+                    must_have, shirt())
+    assert decided.check.status == "unclear"
+    assert decided.check.evidence.note.endswith("(Not confirmed: only the photo can show the colour.)")
+
+
+@pytest.mark.parametrize("kind, quote", [("attribute", ""), ("reviews", "Lovely navy colour")])
+def test_a_colour_pass_from_a_saved_detail_or_reviews_is_unclear(kind, quote):
+    product = make_product(attributes={"colour": Attribute(value="blue", confidence=1.0, source="catalogue")},
+                           reviews=[(5, "Lovely navy colour.", False)])
+    decided = judge(answer("m9", "pass", kind, "Blue", quote=quote, agree=[1]), BLUE, product)
+    assert decided.check.status == "unclear" and decided.notes[0] == "only the photo can show the colour"
+
+
+@pytest.mark.parametrize("attribute, value, group", [("dial_colour", "black", "watches"),
+                                                     ("strap_colour", "brown", "watches"),
+                                                     ("sole_colour", "white", "shoes"),
+                                                     ("lens_colour", "mirrored", "sunglasses"),
+                                                     ("wash", "dark", "bottoms")])
+def test_every_colour_detail_passes_only_from_the_photo(attribute, value, group):
+    must_have = MustHave(id="m9", attribute=attribute, rule="is", value=value)
+    product = make_product(group=group, title=f"Product with {value} {attribute}")
+    from_text = judge(answer("m9", "pass", "details", "Title says so", quote=f"Product with {value}"), must_have, product)
+    assert from_text.check.status == "unclear"
+    from_photo = judge(answer("m9", "pass", note=f"{value} in the photo", box=GARMENT), must_have, product)
+    assert from_photo.check.status == "pass" and from_photo.check.evidence.box_2d == GARMENT
+
+
+def test_the_photo_wins_over_the_title_both_ways():
+    navy_title = shirt("Navy Blue Linen Shirt")
+    sky_in_photo = judge(answer("m9", "fail", note="The shirt in the photo is sky blue", box=GARMENT), NAVY, navy_title)
+    assert sky_in_photo.check.status == "fail"
+    title_only = judge(answer("m9", "pass", "details", "Title says navy", quote="Navy Blue Linen Shirt"), NAVY, navy_title)
+    assert title_only.check.status == "unclear"
+    sky_title = shirt("Sky Blue Linen Shirt")
+    navy_in_photo = judge(answer("m9", "pass", note="A very dark navy shirt", box=GARMENT), NAVY, sky_title)
+    assert navy_in_photo.check.status == "pass" and navy_in_photo.check.evidence.box_2d == GARMENT
+
+
+def test_a_colour_fail_from_text_is_left_to_geminis_judgement():
+    decided = judge(answer("m9", "fail", "details", "Title says light blue", quote="Light Blue Linen Blend"), NAVY, shirt())
+    assert decided.check.status == "fail"
+
+
+def test_a_saved_family_cannot_settle_a_shade():
+    product = catalogue_shirt("blue", "Blue")
+    family_only = judge(answer("m9", "fail", "attribute", "Saved colour is blue"), NAVY, product)
+    assert family_only.check.status == "unclear" and family_only.notes == ("the saved detail can't settle this",)
+    other_family = judge(answer("m9", "fail", "attribute", "Saved colour is red"), NAVY, catalogue_shirt("red", "Red"))
+    assert other_family.check.status == "fail"
+    assert verify.saved_verdict(NAVY, "blue") is None and verify.saved_verdict(NAVY, "green") == "fail"
+    assert verify.saved_verdict(BLUE, "blue") == "pass"
+    assert verify.saved_verdict(MustHave(id="m9", attribute="colour", rule="is_not", value="navy blue"), "red") == "pass"
+
+
+def test_the_must_have_line_says_what_a_family_or_shade_covers_and_to_use_the_photo():
+    product = shirt()
+    prompt = verify.product_prompt(product, verify.listing_for(product), [NAVY])
+    line = next(line for line in prompt.splitlines() if line.startswith("- m9:"))
+    assert 'colour must be "navy blue"' in line and 'shopper\'s chip: "navy blue"' in line
+    assert "navy blue is a shade of blue: a very dark blue, close to black; sky blue, light blue" in line
+    assert "other shades of blue don't count. Judge the main colour, the one covering most of the product" in line
+    assert "check from: the photo only (the title and description can name the wrong colour)" in line
+    assert "values:" not in line
+    family = verify.must_have_line(BLUE, "tops")
+    assert "blue is a colour family: any shade of it counts (navy blue, dark blue," in family and "teal" in family
+    dial = verify.must_have_line(MustHave(id="m1", attribute="dial_colour", rule="is", value="black"), "watches")
+    assert "values: black, white" in dial and "check from: the photo only" in dial
+
+
+def test_the_prompt_tells_gemini_to_judge_colours_from_the_photo():
+    prompt = verify.system_prompt()
+    assert "Judge colours and shades only from the photo" in prompt
+    assert "the photo wins" in prompt and "A white shirt with blue stripes is white" in prompt
+
+
+def test_a_saved_colour_pass_without_the_photo_comes_back_unclear_without_a_call():
+    product = catalogue_shirt()
+    saved = {
+        "15970__colour__is__blue": {"status": "pass", "confidence": 0.9, "version": verify.VERSION,
+                                    "evidence": {"type": "attribute", "note": "Catalogue colour", "quote": "colour: blue"}},
+        "15970__fabric__is__cotton": {"status": "pass", "confidence": 0.9, "version": verify.VERSION,
+                                      "evidence": {"type": "details", "note": "Cotton", "quote": "Fabric: Cotton"}},
+    }
+    by_photo = {"15970__colour__is__blue": {"status": "pass", "confidence": 0.9, "version": verify.VERSION,
+                                            "evidence": {"type": "image", "note": "Blue shirt", "box_2d": GARMENT}}}
+    client = FakeClient(all_pass)
+    brief = ShoppingBrief(category="Shirts", must_haves=[BLUE, COTTON])
+    [verification] = verify.careful_check(brief, [product], client=client, cache=verify.MemoryCache(saved), settings=FAST)
+    assert client.models.calls == []
+    colour, cotton = verification.checks
+    assert (colour.status, cotton.status) == ("unclear", "pass")
+    assert colour.evidence.note == "Catalogue colour (Not confirmed: only the photo can show the colour.)"
+    [kept] = verify.careful_check(ShoppingBrief(category="Shirts", must_haves=[BLUE]), [product], client=client,
+                                  cache=verify.MemoryCache(by_photo), settings=FAST)
+    assert kept.checks[0].status == "pass" and client.models.calls == []
+
+
+def test_shade_and_family_checks_are_saved_apart():
+    assert verify.doc_id("15970", NAVY) == "15970__colour__is__navy-blue" != verify.doc_id("15970", BLUE)
+
+
+def test_a_precheck_redoes_saved_colour_passes_that_lack_the_photo():
+    def doc(status: str, kind: str, attribute: str = "colour", version: str = verify.VERSION) -> dict:
+        return {"attribute": attribute, "status": status, "version": version, "evidence": {"type": kind, "note": "x"}}
+
+    assert not verify.still_usable(doc("pass", "details")) and not verify.still_usable(doc("pass", "attribute"))
+    assert verify.still_usable(doc("pass", "image")) and verify.still_usable(doc("fail", "details"))
+    assert verify.still_usable(doc("pass", "details", attribute="fabric"))
+    assert not verify.still_usable(doc("pass", "image", version="v1"))
+
+
+def test_old_live_checks_are_dropped_by_the_live_version():
+    assert verify.LIVE_VERSION == f"{verify.VERSION}-live3"

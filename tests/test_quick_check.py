@@ -116,6 +116,39 @@ def test_meets(must_have, value, expected):
     assert meets(must_have, value) is expected
 
 
+NAVY = must("colour", "is", "navy blue")
+NOT_NAVY = must("colour", "is_not", "navy blue")
+BLUE = must("colour", "is", "blue")
+NOT_BLUE = must("colour", "is_not", "blue")
+
+
+@pytest.mark.parametrize(
+    "must_have, saved, expected",
+    [
+        (BLUE, "blue", True),
+        (BLUE, "red", False),
+        (NOT_BLUE, "blue", False),
+        (NOT_BLUE, "green", True),
+        (NAVY, "blue", None),
+        (NAVY, "green", False),
+        (NAVY, "multi", False),
+        (NOT_NAVY, "blue", None),
+        (NOT_NAVY, "red", True),
+        (NAVY, "unknown", None),
+    ],
+)
+def test_a_saved_colour_family_against_a_family_or_a_shade(must_have, saved, expected):
+    assert meets(must_have, saved) is expected
+
+
+def test_a_shade_drops_only_other_families_and_sends_its_own_family_to_the_careful_check():
+    navy_label = product("navy", attributes={"colour": catalogue("blue")}, baseColour="Navy Blue")
+    teal_label = product("teal", attributes={"colour": catalogue("blue")}, baseColour="Teal")
+    green = product("green", attributes={"colour": catalogue("green")}, baseColour="Sea Green")
+    assert check([NAVY], navy_label, teal_label, green) == (["navy", "teal"], {"green": "not navy blue"})
+    assert check([NOT_NAVY], navy_label, green) == (["navy", "green"], {})
+
+
 def test_the_reason_is_the_first_broken_must_have_in_brief_order_with_the_rank_label():
     loud_without_pockets = product(
         "p",

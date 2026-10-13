@@ -5,7 +5,9 @@ It makes no Gemini call. A saved detail is clear enough to drop on when:
 - its value isn't 'unknown', the product's needs_review list doesn't name it, and Gemini's own reading (kept next
   to a catalogue value) doesn't meet the must-have either.
 Shop details (cod, returnable, exchange) come from shop data and are certain. Review-only details (size_fit,
-durability, colour_fastness, colour_match) are never decided here; the careful check reads the reviews.
+durability, colour_fastness, colour_match) are never decided here; the careful check reads the reviews. A saved
+colour is a family, so a shade must-have drops a product only when the families differ; the same family with
+another or unknown shade goes on to the careful check, which reads the photo.
 
 Live store products have no saved details, so `live_quick_check` only drops what's certain from the store's own
 data: a price beyond the soft budget limit, or the shopper's size not available.
@@ -19,7 +21,7 @@ from agent.retrieve import Hit
 from agent.rules import failure_label
 from agent.sources.shopify import same_size
 from agent.tradeoffs import raised_budget
-from data_prep.schemas import REVIEW_ATTRIBUTES, SHOP_ATTRIBUTES, UNKNOWN
+from data_prep.schemas import REVIEW_ATTRIBUTES, SHOP_ATTRIBUTES, UNKNOWN, colour_within
 from data_prep.simulate import ONE_SIZE
 
 CONFIDENT = 0.85
@@ -100,6 +102,9 @@ def meets(must_have: MustHave, value: Value | None) -> bool | None:
     value = _plain(value)
     if value is None or value in ("", UNKNOWN):
         return None
+    if must_have.attribute == "colour" and must_have.rule in ("is", "is_not") and isinstance(value, str):
+        within = colour_within(value, str(must_have.value))
+        return None if within is None else within == (must_have.rule == "is")
     match must_have.rule:
         case "is":
             return value == _plain(must_have.value)
