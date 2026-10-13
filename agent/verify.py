@@ -18,6 +18,12 @@ code, whatever Gemini answers:
 Every result is saved in the Firestore `checks` collection under f"{product_id}__{must_have.key()}", so a repeated
 check is instant. A product whose call keeps failing comes back all unclear with the reason, and isn't saved.
 
+Live Shopify products (source 'shopify') have no reviews and no saved details. Their title, store and description
+are the store's listing (Shopify marks the description as possibly enriched; in practice it carries the store's own
+HTML). Shopify's AI metadata (features, specs, selling points) counts like an AI's reading of the photo: never proof
+of fabric or sheerness. Their photo is read by Gemini from Shopify's CDN link, never downloaded by us. Their checks
+are saved under "shopify_<hash of the id>" and expire after LIVE_CHECK_TTL, since the listing can change.
+
 Live capacity is small and slow at the tail (data/trials/checks_eval.md), so searches should mostly hit saved
 results. `precheck` fills them ahead of time through Vertex AI batch mode (half price, its own capacity), for every
 product of each brief's category and gender:
@@ -27,6 +33,7 @@ product of each brief's category and gender:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -39,7 +46,7 @@ import urllib.request
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import cache, partial
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -57,6 +64,8 @@ FLASH_MODEL = "gemini-3.8-flash"
 LITE_MODEL = "gemini-3.5-flash-lite"
 # Bump when the prompt or the rules below change, so results saved by an older version aren't reused.
 VERSION = "v2"
+# Bump the suffix when only the live listing (live_listing) changes, so the catalogue's saved results stay.
+LIVE_VERSION = f"{VERSION}-live1"
 DEFAULT_COLLECTION = "checks"
 DEFAULT_PARALLEL = 12
 THINKING_LEVEL = "low"
@@ -64,6 +73,15 @@ MAX_OUTPUT_TOKENS = 4096
 REQUEST_TIMEOUT_MS = 30_000
 MAX_REVIEWS = 20
 MAX_TEXT = 2000
+LIVE_PREFIX = "gid://shopify/"
+LIVE_CHECK_TTL = timedelta(hours=24)
+PHOTO_READER = "an AI reading of the photo"
+SHOPIFY_READER = "Shopify's AI summary"
+LIVE_SHOP_NOTES = {
+    "cod": "Live stores show cash on delivery at their own checkout.",
+    "returnable": "Returns are in the store's own refund policy.",
+    "exchange": "Exchanges are in the store's own refund policy.",
+}
 
 # US$ per million tokens on the global endpoint (input, output including thinking). Batch is half.
 PRICES = {FLASH_MODEL: (0.75, 3.75), LITE_MODEL: (0.30, 2.50)}
@@ -231,6 +249,7 @@ class Listing:
     seller_texts: list[str]
     ai_texts: list[str]
     reviews: list[ReviewLine]
+    ai_reader: str = PHOTO_READER
 
 
 def looks_like_instructions(text: str) -> bool:
@@ -259,6 +278,8 @@ def attribute_order(group: str, name: str) -> tuple[int, str]:
 
 def listing_for(product: Product, max_reviews: int = MAX_REVIEWS) -> Listing:
     """The DETAILS lines, plus which of their text came from the seller and which from an AI reading the photo."""
+    if product.source == "shopify":
+        return live_listing(product)
     seller = [f"Title: {clean(product.title)}", f"Product type: {product.article_type}", f"Gender: {product.gender}"]
     for name, value in (("Brand", product.brand), ("Colour (catalogue label)", product.base_colour),
                         ("Usage (catalogue label)", product.usage)):
@@ -302,6 +323,22 @@ def listing_for(product: Product, max_reviews: int = MAX_REVIEWS) -> Listing:
         for number, review in enumerate(product.reviews[:max_reviews], start=1)
     ]
     return Listing(lines, seller, ai, reviews)
+
+
+def live_listing(product: Product) -> Listing:
+    """A live store's listing: the title, store and description are the store's; Shopify's AI metadata isn't."""
+    seller = [f"Title: {clean(product.title)}"]
+    if product.store:
+        seller.append(f"Store: {clean(product.store)}")
+    if description := clean(product.description)[:MAX_TEXT]:
+        seller.append(f"Store description (the store's listing; Shopify may have enriched it): {description}")
+    lines = [*seller, f"Product type (from the shopper's search, not the store): {product.article_type}"]
+    ai: list[str] = []
+    for name, value in sorted(product.catalogue_details.items()):
+        if text := clean(value)[:MAX_TEXT]:
+            lines.append(f"{clean(name)} (inferred by Shopify's AI): {text}")
+            ai.append(text)
+    return Listing(lines, seller, ai, [], ai_reader=SHOPIFY_READER)
 
 
 def review_line(review: ReviewLine) -> str:
@@ -614,7 +651,7 @@ class _Judge:
             return
         if quoted_in(self.quote, self.listing.ai_texts):
             if self.status == "pass" and self.must_have.attribute in NOT_FROM_PHOTO:
-                self.downgrade("an AI reading of the photo can't show this")
+                self.downgrade(f"{self.listing.ai_reader} can't show this")
             return
         self.downgrade("quote not found in the details", f": {self.quote!r}")
         self.quote = None
@@ -719,7 +756,9 @@ def shop_check(must_have: MustHave, product: Product) -> Check:
     fact = shop_fact(must_have.attribute, product)
     wanted = wanted_yes(must_have)
     if fact is None or wanted is None:
-        return Check(must_have_id=must_have.id, status="unclear", confidence=0.0)
+        note = LIVE_SHOP_NOTES.get(must_have.attribute) if product.source == "shopify" else None
+        evidence = Evidence(type="details", note=note) if note else None
+        return Check(must_have_id=must_have.id, status="unclear", confidence=0.0, evidence=evidence)
     actual, note = fact
     evidence = Evidence(type="details", note=f"{note} (shop data)", quote=note)
     return Check(must_have_id=must_have.id, status="pass" if actual == wanted else "fail", confidence=1.0,
@@ -774,13 +813,22 @@ class FirestoreCache:
             batch.commit()
 
 
+def is_live(product_id: str) -> bool:
+    return product_id.startswith(LIVE_PREFIX)
+
+
 def doc_id(product_id: str, must_have: MustHave) -> str:
+    """Firestore ids can't hold '/', so a Shopify id ('gid://shopify/p/...') becomes 'shopify_' plus a short hash."""
+    if is_live(product_id):
+        product_id = "shopify_" + hashlib.sha256(product_id.encode("utf-8")).hexdigest()[:20]
     return f"{product_id}__{must_have.key()}".replace("/", "-")
 
 
-def cache_doc(product_id: str, decided: Decided, model: str) -> dict:
+def cache_doc(product_id: str, decided: Decided, model: str, now: datetime | None = None) -> dict:
     check = decided.check
     must_have = decided.must_have
+    created = now or datetime.now(timezone.utc)
+    expiry = {"expires_at": created + LIVE_CHECK_TTL} if is_live(product_id) else {}
     return {
         "product_id": product_id,
         "attribute": must_have.attribute,
@@ -794,9 +842,23 @@ def cache_doc(product_id: str, decided: Decided, model: str) -> dict:
         "model": decided.model or model,
         "agree_reviews": list(decided.agree_reviews),
         "disagree_reviews": list(decided.disagree_reviews),
-        "version": VERSION,
-        "created_at": datetime.now(timezone.utc),
+        "version": version_for(product_id),
+        "created_at": created,
+        **expiry,
     }
+
+
+def version_for(product_id: str) -> str:
+    return LIVE_VERSION if is_live(product_id) else VERSION
+
+
+def expired(doc: dict) -> bool:
+    expires = doc.get("expires_at")
+    if not isinstance(expires, datetime):
+        return False
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    return expires <= datetime.now(timezone.utc)
 
 
 def saved_problem(doc: dict, check: Check, must_have: MustHave, product: Product) -> str | None:
@@ -817,8 +879,10 @@ def saved_problem(doc: dict, check: Check, must_have: MustHave, product: Product
 
 def check_from_doc(doc: dict, must_have: MustHave, product: Product | None = None) -> Check | None:
     """The saved check, or None when it's from an older version or broken. With the product, a saved pass the
-    current code rules would not accept comes back unclear."""
-    if doc.get("version") != VERSION:
+    current code rules would not accept comes back unclear. An expired live check is None."""
+    if doc.get("version") != version_for(str(doc.get("product_id") or "")):
+        return None
+    if expired(doc):
         return None
     try:
         evidence = Evidence.model_validate(doc["evidence"]) if doc.get("evidence") else None
@@ -969,7 +1033,7 @@ def check_product(
             problems.append(f"HTTP {error.code}: {_one_line(error.message)}")
             with stats.lock:
                 stats.rate_limited += error.code == 429
-            if photo_input == "uri" and error.code in PHOTO_LINK_CODES:
+            if photo_input == "uri" and error.code in PHOTO_LINK_CODES and product.source != "shopify":
                 photo_input = "bytes"
                 continue
             if error.code not in RETRY_CODES:

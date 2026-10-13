@@ -3,6 +3,7 @@
 import { getIdToken } from "@/lib/auth";
 import { apiBaseUrl, mockApi } from "@/lib/config";
 import { blobToBase64, shrinkPhoto } from "@/lib/image";
+import { webLink } from "@/lib/links";
 import { readSse } from "@/lib/sse";
 import {
   SEARCH_EVENT_TYPES,
@@ -21,10 +22,13 @@ import {
   type MeUpdate,
   type MustHave,
   type ProductDetails,
+  type ResultCard,
   type RulesBody,
   type SearchEvent,
   type SearchRequest,
   type ShoppingBrief,
+  type WebEvent,
+  type WebResult,
 } from "@/lib/types";
 
 export type ApiErrorKind = "network" | "unauthorized" | "busy" | "badRequest" | "notFound" | "server";
@@ -110,7 +114,7 @@ function withDefaults(brief: ShoppingBrief): ShoppingBrief {
 }
 
 async function briefBody(input: BriefInput): Promise<BriefRequestBody> {
-  const body: BriefRequestBody = { pincode: input.pincode, language: input.language };
+  const body: BriefRequestBody = { pincode: input.pincode, language: input.language, source: input.source };
   if (input.text) body.text = input.text;
   if (typeof input.image === "string") {
     body.image_url = input.image;
@@ -139,15 +143,42 @@ export async function updateBrief(sessionId: string, change: BriefChange): Promi
   return { brief: withDefaults(response.brief) };
 }
 
+function withCardDefaults(card: ResultCard): ResultCard {
+  return {
+    ...card,
+    source: card.source ?? "catalog",
+    store: card.store ?? null,
+    product_url: card.product_url ?? null,
+    shipping_note: card.shipping_note ?? null,
+  };
+}
+
 function withDoneDefaults(event: DoneEvent): DoneEvent {
   return {
     ...event,
     rejected: event.rejected ?? {},
     duplicates: event.duplicates ?? 0,
     tradeoffs: event.tradeoffs ?? [],
-    matches: event.matches ?? [],
-    almost: event.almost ?? [],
+    matches: (event.matches ?? []).map(withCardDefaults),
+    almost: (event.almost ?? []).map(withCardDefaults),
     not_checkable: event.not_checkable ?? [],
+  };
+}
+
+/** Drops results without a title or an http(s) link, so a bad link can never run script when tapped. */
+function withWebDefaults(event: WebEvent): WebEvent {
+  const results = (Array.isArray(event.results) ? event.results : []).flatMap((result): WebResult[] => {
+    const url = webLink(result?.url);
+    if (!url || !result.title) return [];
+    const site = result.site || new URL(url).hostname.replace(/^www\./, "");
+    return [{ ...result, url, site, price_text: result.price_text || null, snippet: result.snippet || null }];
+  });
+  const html = event.search_entry_point_html;
+  return {
+    ...event,
+    results,
+    search_entry_point_html: typeof html === "string" && html.trim() ? html : null,
+    queries: Array.isArray(event.queries) ? event.queries : [],
   };
 }
 
@@ -161,7 +192,9 @@ function toSearchEvent(name: string, data: string): SearchEvent | null {
   const type = name !== "message" ? name : String(payload.type ?? "");
   if (!SEARCH_EVENT_TYPES.has(type as SearchEvent["type"])) return null;
   const event = { ...payload, type } as SearchEvent;
-  return event.type === "done" ? withDoneDefaults(event) : event;
+  if (event.type === "done") return withDoneDefaults(event);
+  if (event.type === "web") return withWebDefaults(event);
+  return event;
 }
 
 /**
@@ -210,11 +243,22 @@ async function* liveStream(sessionId: string, signal?: AbortSignal): AsyncGenera
   }
 }
 
-/** GET /api/products/{id}, with the tick-list for this session's checklist when a session is given. */
+/**
+ * GET /api/products/{id}, with the tick-list for this session's checklist when a session is given.
+ * Live ids are Shopify GIDs ("gid://shopify/p/…"), so the id is always URL-encoded.
+ */
 export async function getProduct(productId: string, sessionId?: string): Promise<ProductDetails> {
-  if (mockApi) return viaMock((mock) => mock.getProduct(productId, sessionId));
   const query = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
-  return requestJson<ProductDetails>("GET", `/api/products/${encodeURIComponent(productId)}${query}`);
+  const product = mockApi
+    ? await viaMock((mock) => mock.getProduct(productId, sessionId))
+    : await requestJson<ProductDetails>("GET", `/api/products/${encodeURIComponent(productId)}${query}`);
+  return {
+    ...product,
+    source: product.source ?? "catalog",
+    store: product.store ?? null,
+    product_url: product.product_url ?? null,
+    checkout_url: product.checkout_url ?? null,
+  };
 }
 
 /** POST /api/feedback: likes, saves and purchases teach the agent the shopper's style. */

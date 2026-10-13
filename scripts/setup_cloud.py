@@ -115,6 +115,22 @@ def create_firestore(api: Api, project: str, location: str) -> Result:
     return Result("firestore", "ok", f"(default) in {location}")
 
 
+def create_ttl_policy(api: Api, project: str, collection: str, field_name: str) -> Result:
+    step = f"expiry on {collection}.{field_name}"
+    url = (
+        f"https://firestore.googleapis.com/v1/projects/{project}/databases/(default)"
+        f"/collectionGroups/{collection}/fields/{field_name}"
+    )
+    code, body = api.call("GET", url)
+    state = (body.get("ttlConfig") or {}).get("state") if code == 200 else None
+    if state in ("ACTIVE", "CREATING"):
+        return Result(step, "exists", state.lower())
+    code, body = api.call("PATCH", f"{url}?updateMask=ttlConfig", json={"ttlConfig": {}})
+    if code >= 400:
+        return Result(step, "failed", error_text(body))
+    return Result(step, "ok", "documents are deleted after their expires_at time")
+
+
 def create_bucket(api: Api, project: str, bucket: str, location: str) -> Result:
     code, body = api.call("GET", f"https://storage.googleapis.com/storage/v1/b/{bucket}")
     if code == 200:
@@ -270,6 +286,7 @@ def main() -> None:
         results += [
             enable_services(api, project, SERVICES),
             create_firestore(api, project, region),
+            create_ttl_policy(api, project, "checks", "expires_at"),
             create_bucket(api, project, bucket, region),
             make_bucket_public(api, bucket),
             create_private_bucket(api, project, upload_bucket, region, delete_after_days=1),

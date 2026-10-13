@@ -176,6 +176,20 @@ Two rules we never break:
 - **Style only changes the order of results.** It never overrides a must-have.
 - **The shopper can always see and clear what the agent has learned.**
 
+### Live stores (the default) and "On other sites"
+
+The shopper chooses where to look: **live stores** (the default) or **our demo catalogue** (our test products, with reviews). We only use official channels, never scraping.
+
+- **Live stores, through Google's Universal Commerce Protocol (UCP).** Shopify's Global Catalog speaks UCP and lets AI agents search live products across Shopify stores, many of them Indian brands.
+ - **The search:** we ask for products that ship within India from Indian stores, within the budget (plus the 20% "what to give up" margin), in the shopper's size, and get back real photos, prices, sizes and the store's description.
+ - **The checks:** the same careful check runs on the store's photo and its own description.
+ - **What can't be checked:** live stores share no reviews, so review-only details (like "true to size") stay "not sure". Cash on delivery, returns and delivery dates are shown as "check at the store's checkout" and never block a match. Shopify's own AI-written product notes are never accepted as proof.
+ - **Buy:** opens the store's own page or checkout. We never handle payment.
+ - **What we keep:** only product IDs and our verdicts, never the stores' data. Saved live checks expire after 24 hours.
+- **On other sites, through Google Search.** Gemini with Grounding with Google Search, an official Agent Platform feature, finds matching listings on Amazon.in, Flipkart, Myntra, Ajio, brand sites and more.
+ - **How they're shown:** as plain links in their own section, marked "Found on Google, not checked by EcommAI", next to Google's search chip, shown exactly as Google provides it.
+ - **What we don't do:** we never open those pages ourselves, and we only show links that Google actually returned.
+
 ### The "I saw it" mode
 
 For when you saw something on someone but have no photo and don't know what it's called.
@@ -273,6 +287,8 @@ flowchart LR
   A --> N["Gemini image model<br/>pictures for 'I saw it'"]
   A --> M["Model Armor<br/>blocks tricks in reviews"]
   A --> B[("BigQuery<br/>search logs for seller insights")]
+  A -->|"UCP"| SH["Shopify Global Catalog<br/>live products from stores"]
+  A --> GS["Gemini + Google Search<br/>'On other sites' links"]
 ```
 
 | Tool | What it does for us, in simple words |
@@ -285,6 +301,8 @@ flowchart LR
 | **Cloud Run (web)** | Hosts our web app (Next.js), next to the agent |
 | **Firebase Authentication** | Google sign-in for shoppers, so their rules, sizes and style are saved |
 | **Cloud Storage** | Stores the product photos |
+| **Shopify Global Catalog, through UCP** | Live products from Shopify stores, searched the official way for AI agents (no API key, our own UCP agent profile at `/.well-known/ucp`) |
+| **Gemini with Grounding with Google Search** | Finds matching listings on other sites for the "On other sites" section, as links only |
 | **BigQuery** | Stores search logs (no personal details) for the seller insights page |
 | **Gemini image model** (Nano Banana) | Draws the quick pictures in "I saw it" mode |
 | **Gemini Live** (later) | Real-time voice conversation |
@@ -313,6 +331,8 @@ Sarika's first notebook used MiniLM, a free model that only understands text. We
 ### What we have
 
 Sarika's notebook already prepared **3,000 products** from a public Kaggle dataset of Myntra products, with photos. It has shirts, T-shirts, watches, shoes, kurtas, handbags, sunglasses and more, which is good for showing that we work across categories.
+
+This is our **demo catalogue**: products with reviews, used for the stage stories. Shoppers search **live stores** by default (section 4, "Live stores").
 
 ### What's missing
 
@@ -664,7 +684,8 @@ class Verification(BaseModel):
 | Endpoint | Input | Output |
 |---|---|---|
 | `GET /health` (and `/healthz`) | — | `{ ok: true }`. Cloud Run reserves some paths ending in "z", so health checks use `/health` |
-| `POST /api/brief` | `{ text?, image_url?, image_base64?, image_mime_type?, pincode, language }` | `{ session_id, brief, question }`. An unknown pincode is a 400 with a friendly message |
+| `POST /api/brief` | `{ text?, image_url?, image_base64?, image_mime_type?, pincode, language, source? }`. `source` is `live` (default) or `catalog` | `{ session_id, brief, question }`. An unknown pincode is a 400 with a friendly message |
+| `GET /.well-known/ucp` | — | Our UCP agent profile (public), which Shopify reads when we search live stores |
 | `POST /api/brief/update` | `{ session_id, change }`. `change` is one of: `text`, `answer`, `add_must_have` (these three go to Gemini), or `edit_must_have`, `remove_must_have`, `set_rule` (switch a saved rule off for this search), `remove_nice_to_have`, `set_budget`, `set_deadline`, `set_pincode`, `set_size` (applied in code) | `{ brief }` |
 | `POST /api/search` | `{ session_id }` | Stream, see below |
 | `GET /api/products/{id}?session_id=` | — | The product (no embedding) plus the tick-list for that search's checklist, and `sizes_in_stock` |
@@ -695,6 +716,13 @@ class Verification(BaseModel):
 - `done { checked, passed, unclear, rejected, duplicates, tradeoffs, matches[], almost[], not_checkable[] }`. Each match is a result card: the ranked result (title, total price, delivery date, ticks, reason) plus brand, photo links, price, delivery fee, COD, returns, rating, `demo_data` and sizes in stock.
 - `error { message, retryable }`.
 - A `: ping` comment line goes out every 15 s to keep the connection open.
+- `web { results[{ title, url, site, price_text, snippet }], search_entry_point_html, queries }`: live searches only, sent before `done` when Google Search found listings on other sites. Links come only from Google's grounding sources, and the HTML is Google's own search chip, passed through unchanged.
+
+**Live products:**
+- **IDs:** Shopify IDs like `gid://shopify/p/<id>?shop=<store>`, so the app URL-encodes the whole ID. `GET /api/products/{id}` needs the `session_id` for them.
+- **Result cards** also carry `source` (`catalog` or `shopify`), `store`, `product_url` and `shipping_note`. Live cards have no delivery date, COD or returns, and their total is the item price plus shipping at the store.
+- **Checkout:** `POST /api/checkout { product_id, size?, session_id? }` returns the store's own checkout or product link, and opens the product page when no size is picked.
+- **Switching source:** the checklist edit `{ type: "set_source", source }` switches between live stores and the demo catalogue.
 
 **Products for "what to give up":** the careful check also takes a few products that miss exactly one must-have. They keep that fail, so they can never be matches, but "what to give up" can then count what dropping that must-have would give.
 
@@ -756,6 +784,7 @@ users/{userId}                         // userId = the shopper's Firebase sign-i
 sessions/{sessionId}
   userId, brief, history, results, feedback
   rules, disabled_rules                // the saved rules at the time, and the ones switched off for this search
+  source, live_ids                     // "live" or "catalog"; for live searches only the Shopify IDs shown, never their data
   query_text, photo, photo_vector      // the shopper's words and photo (photo is a private upload, deleted after the search)
   timings                              // milliseconds per step, for speed checks
 
@@ -764,6 +793,7 @@ checks/{productId}__{attribute}__{rule}__{value}   // saved careful-check result
   status, confidence, evidence, model, created_at
   raw_answer, changed_by_code               // Gemini's own answer, and why code rules changed it (if they did)
   version                                   // prompt and rules version; older results are re-checked
+  expires_at                                // live products only (doc id "shopify_<hash>"): deleted after 24 hours by a Firestore expiry policy
 
 shares/{shareId}
   product_ids, brief, created_at       // opens without sign-in
@@ -938,6 +968,7 @@ Any detail can also be `unknown` when the photo and the real details don't show 
 | Writing demo reviews for 3,000 products (one time) | about US$3–5 |
 | Gemini embeddings for 3,000 products | under US$1 |
 | One shopper search (understanding plus about 12 careful checks) | about US$0.03 (₹2–3) when checked live; close to zero when the checks are already saved |
+| One live-store search (Shopify search is free; checks, checklist and the Google Search section) | about ₹2.7 within Google Search's 5,000 free searches a month; about ₹8–12 after that (US$14 per 1,000 searches, 4–8 searches per request) |
 | Pre-checking a demo search in batch mode (about 350 checks) | about US$0.27 |
 | Cloud Run, Firestore and Storage at demo size | mostly free tier |
 

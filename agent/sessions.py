@@ -2,7 +2,9 @@
 
 users/{uid}       name, email, pincode, language, rules, taste, likes, dislikes
 sessions/{id}     user_id, brief, the saved rules it was made with, rules switched off for it, history, results,
-                  feedback, and the shopper's photo until the search has embedded it
+                  feedback, and the shopper's photo until the search has embedded it; source ('live' Shopify stores
+                  or our demo 'catalog') and, for live searches, only the ids of the products shown (Shopify's
+                  terms don't allow caching its search results, so product pages and checkout fetch them fresh)
 uploads/{uid}/... the shopper's photos, in a bucket that isn't public; deleted once the search has used them
 
 Name and email are kept only in users/{uid}, and nothing here logs them or the uid.
@@ -14,7 +16,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from functools import cache
-from typing import Any
+from typing import Any, Literal
 
 from google.api_core.exceptions import NotFound
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -61,6 +63,8 @@ class SessionDoc(BaseModel):
     results: dict | None = None
     feedback: list[dict] = Field(default_factory=list)
     timings: dict[str, float] = Field(default_factory=dict)
+    source: Literal["live", "catalog"] = Field(default="catalog", description="Searches made before 'live' are catalog")
+    live_ids: list[str] = Field(default_factory=list, description="Shopify ids shown by the last live search")
 
 
 def now_utc() -> datetime:
@@ -139,7 +143,8 @@ class Store:
     # ---------- Searches ----------
 
     def new_session(
-        self, uid: str, brief: ShoppingBrief, *, query_text: str, rules: list[MustHave], photo: str | None
+        self, uid: str, brief: ShoppingBrief, *, query_text: str, rules: list[MustHave], photo: str | None,
+        source: Literal["live", "catalog"] = "catalog",
     ) -> SessionDoc:
         moment = now_utc()
         session = SessionDoc(
@@ -151,6 +156,7 @@ class Store:
             brief=brief,
             rules=rules,
             photo=photo,
+            source=source,
         )
         self.save_session(session)
         return session

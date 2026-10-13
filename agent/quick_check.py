@@ -6,15 +6,25 @@ It makes no Gemini call. A saved detail is clear enough to drop on when:
   to a catalogue value) doesn't meet the must-have either.
 Shop details (cod, returnable, exchange) come from shop data and are certain. Review-only details (size_fit,
 durability, colour_fastness, colour_match) are never decided here; the careful check reads the reviews.
+
+Live store products have no saved details, so `live_quick_check` only drops what's certain from the store's own
+data: a price beyond the soft budget limit, or the shopper's size not available.
 """
 
+from collections.abc import Sequence
+
 from agent.models import Attribute, MustHave, Product, ShoppingBrief
+from agent.rank import OVER_BUDGET
 from agent.retrieve import Hit
 from agent.rules import failure_label
+from agent.sources.shopify import same_size
+from agent.tradeoffs import raised_budget
 from data_prep.schemas import REVIEW_ATTRIBUTES, SHOP_ATTRIBUTES, UNKNOWN
+from data_prep.simulate import ONE_SIZE
 
 CONFIDENT = 0.85
 ABSENT_VALUES = {"none", "no"}
+SIZE_NOT_AVAILABLE = "size not in stock"
 
 Value = str | bool | float
 
@@ -30,6 +40,37 @@ def quick_check(brief: ShoppingBrief, hits: list[Hit]) -> tuple[list[Hit], list[
         else:
             dropped.append((hit, failure_label(broken)))
     return kept, dropped
+
+
+def live_quick_check(brief: ShoppingBrief, products: Sequence[Product]) -> tuple[list[Hit], list[tuple[Hit, str]]]:
+    """Live products as hits in the store's order (total = selling price; shipping is shown at the store's checkout).
+
+    Up to the soft budget limit they're kept and marked over budget, as in agent/retrieve.py.
+    """
+    kept: list[Hit] = []
+    dropped: list[tuple[Hit, str]] = []
+    budget = brief.budget_max_inr
+    for position, product in enumerate(products):
+        if product.price is None:
+            continue
+        total = product.price.selling
+        hit = Hit(product=product, distance=position / max(1, len(products)), total_price=total,
+                  over_budget=budget is not None and total > budget)
+        if hit.over_budget and total > raised_budget(budget):
+            dropped.append((hit, OVER_BUDGET))
+        elif brief.size and not has_size(product, brief.size):
+            dropped.append((hit, SIZE_NOT_AVAILABLE))
+        else:
+            kept.append(hit)
+    return kept, dropped
+
+
+def has_size(product: Product, size: str) -> bool:
+    """False only when the store lists sizes and none of the available ones is the shopper's."""
+    sizes = {name: count for name, count in product.sizes.items() if name != ONE_SIZE}
+    if not sizes:
+        return True
+    return any(count > 0 and same_size(name, size) for name, count in sizes.items())
 
 
 def first_broken(must_haves: list[MustHave], product: Product) -> MustHave | None:

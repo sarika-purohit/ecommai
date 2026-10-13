@@ -31,6 +31,26 @@ const en = {
     save: "Save",
     tryAgain: "Try again",
     loading: "Loading",
+    newTab: "(opens in a new tab)",
+  },
+
+  source: {
+    legend: "Where to look",
+    live: "Live stores",
+    catalog: "Demo catalogue",
+    help: {
+      live: "Live stores: real products from Indian shops, checked by us.",
+      catalog: "Demo catalogue: our test products with reviews.",
+    },
+    checklistHint: "Change it, then tap “Find matches”.",
+    searched: {
+      live: "Searched live stores",
+      catalog: "Searched the demo catalogue",
+    },
+    switchTo: {
+      live: "Search live stores instead",
+      catalog: "Search the demo catalogue instead",
+    },
   },
 
   signIn: {
@@ -176,6 +196,10 @@ const en = {
       passed === 1
         ? `We checked ${checked}. 1 has everything you asked for.`
         : `We checked ${checked}. ${passed} have everything you asked for.`,
+    nothingFound: {
+      live: "We didn’t find any products in live stores.",
+      catalog: "We didn’t find any products in the demo catalogue.",
+    },
     proofHint: "Tap a must-have to see the proof.",
     unclear: (count: number) =>
       count === 1 ? "1 more we couldn’t fully confirm" : `${count} more we couldn’t fully confirm`,
@@ -214,6 +238,13 @@ const en = {
     newSearch: "New search",
   },
 
+  web: {
+    title: "On other sites",
+    note: "Found on Google – not checked by EcommAI",
+    suggestions: "Google Search suggestions",
+    detail: (site: string, price: string | null) => (price ? `${site} · ${price}` : site),
+  },
+
   card: {
     inclDelivery: "incl. delivery",
     inclDeliveryAndCod: (fee: string) => `incl. delivery and ${fee} cash-on-delivery fee`,
@@ -230,6 +261,11 @@ const en = {
     feedbackFailed: "That didn’t save. Try again.",
     seeProduct: "See product",
     mustHaves: "Must-haves",
+    fromStore: (store: string) => `From ${store}`,
+    liveShipping: "Shipping and delivery shown at the store’s checkout",
+    buyOn: (store: string | null) => (store ? `Buy on ${store}` : "Buy on store"),
+    opening: "Opening the store…",
+    opened: "Opened in a new tab. If nothing opened, tap the button again.",
   },
 
   proof: {
@@ -242,6 +278,8 @@ const en = {
     fromReviews: "From reviews",
     fromStore: "From the store’s details",
     fromNoted: "From the details we noted from the photo",
+    fromStorePhoto: "Seen in the store’s photo",
+    fromStoreDescription: (store: string | null) => (store ? `From ${store}’s description` : "From the store’s description"),
     reviewCounts: (agree: number, disagree: number) => `${agree} agree · ${disagree} disagree`,
     demoReviews: "Demo reviews",
     nothing: "We found nothing to go on, so we can’t confirm this one.",
@@ -253,10 +291,13 @@ const en = {
     backHome: "New search",
     fullPhoto: "Open full-size photo",
     checklist: "Your checklist",
+    factStore: "Store",
     factDelivery: "Delivery",
     factReturns: "Returns",
     factPayment: "Payment",
+    sizeAtStore: "Pick your size on the store’s page.",
     mrp: (amount: string) => `MRP ${amount}`,
+    beforeShipping: "Before shipping",
     off: (percent: number) => `${percent}% off`,
     arrivesBy: (date: string) => `Arrives by ${date}`,
     deliverTo: (pincode: string) => `to ${pincode}`,

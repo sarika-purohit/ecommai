@@ -5,6 +5,7 @@
 
 import { addDays, todayInIndia } from "@/lib/format";
 import { KURTAS, WATCHES, type CatalogProduct } from "@/lib/mock-catalog";
+import { LIVE_PRODUCTS, SHIPPING_NOTE, searchEntryPointFor, shopifyPhoto, webResultsFor, type LiveProduct } from "@/lib/mock-live";
 import type {
   BriefChange,
   BriefInput,
@@ -25,16 +26,21 @@ import type {
   ResultCard,
   RulesBody,
   SearchEvent,
+  SearchSource,
   ShoppingBrief,
   Status,
   Tick,
   Tradeoff,
+  WebEvent,
 } from "@/lib/types";
 
 type Detail = Omit<MustHave, "id" | "from_rule">;
+type MockProduct = CatalogProduct | LiveProduct;
 
 interface MockSession {
   brief: ShoppingBrief;
+  /** Missing on sessions saved before the choice existed, which searched the catalogue. */
+  source?: SearchSource;
   questionTarget: "size" | "dial_markings" | null;
   /** ruleKey() of personal rules switched off for this search. */
   rulesOff: string[];
@@ -64,6 +70,7 @@ const PROFILE_KEY = "ecommai.mock.profile";
 const BUCKET = "https://storage.googleapis.com/ecommai-511419-catalog";
 /** Products the quick check rules out before the careful check, when there's anything to rule out on. */
 const QUICK_DROPS = 28;
+const LIVE_QUICK_DROPS = 6;
 const STARTING_RULES: MustHave[] = [{ id: "r1", attribute: "cod", rule: "present", value: true, from_rule: true }];
 const TOP_SIZES = ["S", "M", "L", "XL", "XXL"];
 
@@ -174,7 +181,10 @@ const REVIEW_ATTRIBUTES = ["size_fit", "durability", "colour_fastness", "colour_
 const GROUP_ATTRIBUTES: Record<string, string[]> = {
   tops: ["sleeve_length", "neckline", "pockets", "pattern", "print_intensity", "fabric", "sheerness", "fit", "length", "closure", "usage", "colour"],
   watches: ["display", "dial_colour", "dial_markings", "case_shape", "case_material", "case_size", "strap_material", "strap_colour", "chronograph"],
+  shoes: ["type", "sole_type", "sole_colour", "upper_material", "logo_visible", "heel_height", "colour"],
 };
+/** Only live stores sell shoes here; the demo catalogue has kurtas and watches. */
+const SHOES = "Casual Shoes";
 
 function colourFamily(baseColour: string | null): string | null {
   return baseColour ? (COLOUR_FAMILY[baseColour.trim().toLowerCase()] ?? null) : null;
@@ -267,7 +277,7 @@ function ruleKey(mustHave: Pick<MustHave, "attribute" | "rule" | "value">): stri
 }
 
 function appliesTo(category: string, attribute: string): boolean {
-  const group = category === "Watches" ? "watches" : "tops";
+  const group = category === "Watches" ? "watches" : category === SHOES ? "shoes" : "tops";
   return [...GROUP_ATTRIBUTES[group], ...SHOP_ATTRIBUTES, ...REVIEW_ATTRIBUTES].includes(attribute);
 }
 
@@ -295,7 +305,8 @@ function newBrief(input: BriefInput, category: string): ShoppingBrief {
     category,
     gender: category === "Watches" ? null : genderFrom(text),
     must_haves: [],
-    nice_to_haves: /\b(office|work|formal)\b/i.test(text) && category !== "Watches" ? [{ attribute: "usage", value: "office" }] : [],
+    nice_to_haves:
+      /\b(office|work|formal)\b/i.test(text) && category !== "Watches" && category !== SHOES ? [{ attribute: "usage", value: "office" }] : [],
     rules_applied: [],
     budget_max_inr: budgetFrom(text),
     deadline_date: deadlineFrom(text),
@@ -309,10 +320,17 @@ function newBrief(input: BriefInput, category: string): ShoppingBrief {
   };
 }
 
+function categoryFor(text: string, source: SearchSource): string {
+  if (/\bwatch/i.test(text)) return "Watches";
+  if (source === "live" && /\b(sneakers?|shoes?|trainers?)\b/i.test(text)) return SHOES;
+  return "Kurtas";
+}
+
 export async function createBrief(input: BriefInput): Promise<BriefResponse> {
   await sleep(900);
   const text = input.text ?? "";
-  const category = /\bwatch/i.test(text) ? "Watches" : "Kurtas";
+  const source = input.source;
+  const category = categoryFor(text, source);
   const brief = newBrief(input, category);
   const details = detailsFrom(text, category);
   brief.must_haves = details.map((detail, index) => ({ ...detail, id: `m${index + 1}`, from_rule: false }));
@@ -329,6 +347,7 @@ export async function createBrief(input: BriefInput): Promise<BriefResponse> {
 
   const session: MockSession = {
     brief: withRules(brief, []),
+    source,
     questionTarget,
     rulesOff: [],
     nextId: details.length + 1,
@@ -444,6 +463,8 @@ function applyChange(session: MockSession, change: BriefChange): MockSession {
       return { ...session, brief: { ...brief, pincode: change.pincode } };
     case "set_size":
       return { ...session, brief: { ...brief, size: change.size, missing: brief.missing.filter((m) => m !== "size") } };
+    case "set_source":
+      return { ...session, source: change.source };
     case "answer":
       return answerQuestion(session, change.answer);
     case "text":
@@ -592,8 +613,48 @@ function checkOne(product: CatalogProduct, mustHave: MustHave): Check {
   return { ...check, must_have_id: mustHave.id };
 }
 
-function checksFor(product: CatalogProduct, brief: ShoppingBrief): Check[] {
-  return brief.must_haves.map((mustHave) => checkOne(product, mustHave));
+function isLive(product: MockProduct): product is LiveProduct {
+  return "store" in product;
+}
+
+/** As agent/verify.py says for live stores, which keep payment and returns to their own checkout. */
+const LIVE_SHOP_NOTES: Record<string, string> = {
+  cod: "Live stores show cash on delivery at their own checkout.",
+  returnable: "Returns are in the store's own refund policy.",
+  exchange: "Exchanges are in the store's own refund policy.",
+};
+
+/** A live product is checked against the store's own photo and description; there are no reviews or shop data. */
+function checkLive(product: LiveProduct, mustHave: MustHave): Check {
+  const quote = product.listing?.[mustHave.attribute] ?? null;
+  const box = product.boxes?.[mustHave.attribute] ?? null;
+  let check: Check;
+  if (SHOP_ATTRIBUTES.includes(mustHave.attribute)) {
+    check = { must_have_id: "", status: "unclear", confidence: 0, evidence: evidence("details", LIVE_SHOP_NOTES[mustHave.attribute]) };
+  } else if (mustHave.attribute === "colour") {
+    const family = colourFamily(product.baseColour);
+    check = judged(
+      family ? meets(family, mustHave) : null,
+      0.9,
+      evidence("details", `The store gives the colour as ${product.baseColour ?? "unknown"}.`, {
+        quote: quote ?? (product.baseColour ? `Colour: ${product.baseColour}` : null),
+      }),
+    );
+  } else {
+    const attribute = product.attributes[mustHave.attribute];
+    const note = attribute?.note || "The store’s photo and description don’t show this.";
+    const found = quote ? evidence("details", note, { quote }) : evidence("image", note, { box_2d: box });
+    if (!attribute || String(attribute.value) === "unknown" || attribute.confidence < 0.6) {
+      check = judged(null, 0.4, found);
+    } else {
+      check = judged(meets(attribute.value, mustHave), Math.min(0.95, attribute.confidence), found);
+    }
+  }
+  return { ...check, must_have_id: mustHave.id };
+}
+
+function checksFor(product: MockProduct, brief: ShoppingBrief): Check[] {
+  return brief.must_haves.map((mustHave) => (isLive(product) ? checkLive(product, mustHave) : checkOne(product, mustHave)));
 }
 
 function overall(checks: Check[]): Status {
@@ -626,8 +687,9 @@ function indiaHour(): number {
   return Number(hour);
 }
 
-function deliveryDate(product: CatalogProduct, pincode: string | null): string | null {
-  if (!pincode) return null;
+/** Live stores show delivery at their own checkout, so there's no date to work out. */
+function deliveryDate(product: MockProduct, pincode: string | null): string | null {
+  if (!pincode || isLive(product)) return null;
   const city = BIG_CITIES.find(([prefix]) => pincode.startsWith(prefix))?.[1];
   const days = city === product.warehouse.city ? 2 : city ? 3 : REMOTE_PREFIXES.some((p) => pincode.startsWith(p)) ? 8 : 5;
   let day = todayInIndia();
@@ -644,7 +706,9 @@ function wantsCod(brief: ShoppingBrief): boolean {
   return brief.must_haves.some((m) => m.attribute === "cod" && wantedPresence(m) === true);
 }
 
-function totalPrice(product: CatalogProduct, brief: ShoppingBrief | null): number {
+/** A live product's total is its price: the store adds shipping at its checkout. */
+function totalPrice(product: MockProduct, brief: ShoppingBrief | null): number {
+  if (isLive(product)) return product.price.selling;
   const codFee = brief && wantsCod(brief) && product.cod.available ? product.cod.fee : 0;
   return product.price.selling + product.delivery_fee + codFee;
 }
@@ -654,7 +718,7 @@ function sizeOrder(size: string): number {
   return index === -1 ? TOP_SIZES.length : index;
 }
 
-function sizesInStock(product: CatalogProduct): string[] {
+function sizesInStock(product: MockProduct): string[] {
   return Object.entries(product.sizes)
     .filter(([, count]) => count > 0)
     .map(([size]) => size)
@@ -664,7 +728,7 @@ function sizesInStock(product: CatalogProduct): string[] {
 // ---------- Ranking, as agent/rank.py does it ----------
 
 interface Candidate {
-  product: CatalogProduct;
+  product: MockProduct;
   checks: Check[];
   total: number;
   delivery: string | null;
@@ -694,7 +758,8 @@ function score(brief: ShoppingBrief, candidate: Candidate, cheapest: number, soo
       brief.nice_to_haves.length
     : 0;
   const speed = candidate.delivery && soonest ? 1 / (1 + daysBetween(soonest, candidate.delivery)) : 0;
-  const rating = product.rating_avg === null ? 0 : (product.rating_avg / 5) * (product.rating_count / (product.rating_count + 20));
+  const rating =
+    isLive(product) || product.rating_avg === null ? 0 : (product.rating_avg / 5) * (product.rating_count / (product.rating_count + 20));
   return 3 * nice + (1.5 * cheapest) / candidate.total + speed + rating;
 }
 
@@ -716,16 +781,25 @@ function reasonFor(candidate: Candidate, ticks: Tick[], confirmed: boolean): str
     return `${ticks.filter((t) => t.status === "pass").length} of ${ticks.length} confirmed · not sure about: ${unsure.join(", ")}`;
   }
   const parts = [ticks.length === 1 ? "1 must-have confirmed" : ticks.length ? `All ${ticks.length} must-haves confirmed` : null];
+  const { product } = candidate;
+  if (isLive(product)) {
+    parts.push(`${agentRupees(candidate.total)} + shipping`);
+    return parts.filter(Boolean).join(" · ");
+  }
   parts.push(`${agentRupees(candidate.total)} delivered`);
   if (candidate.delivery) parts.push(`arrives ${agentDay(candidate.delivery)}`);
-  const { rating_avg: rating, rating_count: count } = candidate.product;
+  const { rating_avg: rating, rating_count: count } = product;
   if (rating !== null) parts.push(`${rating.toFixed(1)}★ (${count} ${count === 1 ? "review" : "reviews"})`);
   return parts.filter(Boolean).join(" · ");
 }
 
+function thumbOf(product: MockProduct): string {
+  return isLive(product) ? shopifyPhoto(product.photo, 300) : `${BUCKET}/thumb/${product.id}.jpg`;
+}
+
 function resultCard(candidate: Candidate, ticks: Tick[], confirmed: boolean, points: number): ResultCard {
   const { product } = candidate;
-  return {
+  const ranked = {
     product_id: product.id,
     title: product.title,
     total_price: candidate.total,
@@ -734,7 +808,34 @@ function resultCard(candidate: Candidate, ticks: Tick[], confirmed: boolean, poi
     reason: reasonFor(candidate, ticks, confirmed),
     score: Math.round(points * 10_000) / 10_000,
     brand: product.brand,
-    thumb: `${BUCKET}/thumb/${product.id}.jpg`,
+    sizes_in_stock: sizesInStock(product),
+  };
+  if (isLive(product)) {
+    return {
+      ...ranked,
+      source: "shopify",
+      store: product.store,
+      product_url: product.product_url,
+      shipping_note: SHIPPING_NOTE,
+      thumb: thumbOf(product),
+      photo: shopifyPhoto(product.photo, 1000),
+      original: product.photo,
+      price: product.price,
+      delivery_fee: 0,
+      cod: null,
+      returns: null,
+      rating_avg: null,
+      rating_count: 0,
+      demo_data: false,
+    };
+  }
+  return {
+    ...ranked,
+    source: "catalog",
+    store: null,
+    product_url: null,
+    shipping_note: null,
+    thumb: thumbOf(product),
     photo: `${BUCKET}/gemini/${product.id}.jpg`,
     original: `${BUCKET}/original/${product.id}.jpg`,
     price: product.price,
@@ -744,11 +845,10 @@ function resultCard(candidate: Candidate, ticks: Tick[], confirmed: boolean, poi
     rating_avg: product.rating_avg,
     rating_count: product.rating_count,
     demo_data: true,
-    sizes_in_stock: sizesInStock(product),
   };
 }
 
-function identity(product: CatalogProduct): string {
+function identity(product: MockProduct): string {
   return [product.brand, product.baseColour, product.title].map((part) => (part ?? "").trim().toLowerCase()).join("|");
 }
 
@@ -826,8 +926,41 @@ function suggestTradeoffs(brief: ShoppingBrief, candidates: Candidate[]): Tradeo
 /** The order careful checks finish in, since they run in parallel. */
 const FINISH_ORDER = [2, 0, 5, 8, 1, 11, 3, 9, 6, 10, 4, 7];
 
-function poolFor(brief: ShoppingBrief): CatalogProduct[] {
+function poolFor(brief: ShoppingBrief, source: SearchSource): MockProduct[] {
+  if (source === "live") return LIVE_PRODUCTS.filter((product) => product.articleType === brief.category);
+  if (brief.category === SHOES) return [];
   return brief.category === "Watches" ? WATCHES : KURTAS;
+}
+
+const QUERY_NOUNS: Record<string, string> = { dial_colour: "dial", strap_material: "strap", sleeve_length: "sleeves", neckline: "neck" };
+
+/** A shopper-style search for the checklist, like the ones Gemini sends to Google Search. */
+function searchQuery(brief: ShoppingBrief): string {
+  const own = brief.must_haves.filter((m) => !m.from_rule && !SHOP_ATTRIBUTES.includes(m.attribute));
+  const values = own.filter((m) => m.rule === "is" && typeof m.value === "string" && m.attribute !== "other");
+  const plain = values.filter((m) => !QUERY_NOUNS[m.attribute]).map((m) => String(m.value));
+  const features = [
+    ...values.filter((m) => QUERY_NOUNS[m.attribute]).map((m) => `${m.value} ${QUERY_NOUNS[m.attribute]}`),
+    ...own.filter((m) => wantedPresence(m) === true).map((m) => attributeWords(m.attribute)),
+  ];
+  const parts = [...brief.not_checkable, ...plain, brief.category.toLowerCase()];
+  if (features.length > 0) parts.push(`with ${features.join(" and ")}`);
+  if (brief.gender && brief.gender !== "unisex") parts.push(`for ${brief.gender}`);
+  if (brief.budget_max_inr !== null) parts.push(`under ₹${brief.budget_max_inr}`);
+  return parts.join(" ");
+}
+
+/** What Grounding with Google Search would find for the checklist on other shops. */
+function webFor(brief: ShoppingBrief): WebEvent {
+  const query = searchQuery(brief);
+  const fallback = `${brief.category.toLowerCase()} online india`;
+  const queries = query === brief.category.toLowerCase() ? [fallback] : [query, fallback];
+  return {
+    type: "web",
+    results: webResultsFor(query, brief.category),
+    search_entry_point_html: searchEntryPointFor(queries),
+    queries,
+  };
 }
 
 /** Quick-check drops, split across the reasons they'd be rejected for, so the counts add up. Never review-only details. */
@@ -848,27 +981,29 @@ function quickReasons(brief: ShoppingBrief, dropped: number): [string, number][]
 export async function* streamSearch(sessionId: string, signal?: AbortSignal): AsyncGenerator<SearchEvent> {
   const session = getSession(sessionId);
   const { brief } = session;
+  const source = session.source ?? "catalog";
   const pincode = brief.pincode ?? loadProfile().pincode;
-  const candidates: Candidate[] = poolFor(brief).map((product) => ({
+  const candidates: Candidate[] = poolFor(brief, source).map((product) => ({
     product,
     checks: checksFor(product, brief),
     total: totalPrice(product, brief),
     delivery: deliveryDate(product, pincode),
   }));
-  const quick = quickReasons(brief, QUICK_DROPS);
+  const quick = candidates.length === 0 ? [] : quickReasons(brief, source === "live" ? LIVE_QUICK_DROPS : QUICK_DROPS);
   const dropped = quick.reduce((sum, [, count]) => sum + count, 0);
+  const order = FINISH_ORDER.filter((index) => index < candidates.length);
 
   await sleep(700, signal);
   yield { type: "candidates", count: candidates.length + dropped, dropped };
 
   for (const { product } of candidates) {
-    yield { type: "checking", product_id: product.id, title: product.title, thumb: `${BUCKET}/thumb/${product.id}.jpg` };
+    yield { type: "checking", product_id: product.id, title: product.title, thumb: thumbOf(product) };
     await sleep(70, signal);
   }
 
-  for (const [step, index] of FINISH_ORDER.entries()) {
+  for (const [step, index] of order.entries()) {
     await sleep(240 + ((index * 137) % 5) * 80, signal);
-    if (session.failNext && step === 5) {
+    if (session.failNext && step === Math.min(5, order.length - 1)) {
       saveSession(sessionId, { ...session, failNext: false });
       yield { type: "error", message: "The checker lost its connection halfway. Try again.", retryable: true };
       return;
@@ -897,6 +1032,11 @@ export async function* streamSearch(sessionId: string, signal?: AbortSignal): As
       : null,
   });
 
+  if (source === "live") {
+    await sleep(250, signal);
+    yield webFor(brief);
+  }
+
   await sleep(300, signal);
   yield {
     type: "done",
@@ -918,8 +1058,53 @@ function findProduct(productId: string): CatalogProduct | undefined {
   return [...KURTAS, ...WATCHES].find((product) => product.id === productId);
 }
 
+function findLive(productId: string): LiveProduct | undefined {
+  return LIVE_PRODUCTS.find((product) => product.id === productId);
+}
+
+function liveView(product: LiveProduct, brief: ShoppingBrief | null): ProductDetails {
+  return {
+    id: product.id,
+    title: product.title,
+    brand: product.brand,
+    gender: product.gender,
+    masterCategory: product.masterCategory,
+    subCategory: product.subCategory,
+    articleType: product.articleType,
+    baseColour: product.baseColour,
+    usage: product.usage,
+    group: product.group,
+    description: product.description,
+    attributes: product.attributes,
+    catalogue_details: {},
+    needs_review: [],
+    price: product.price,
+    sizes: product.sizes,
+    warehouse: null,
+    delivery_fee: 0,
+    cod: null,
+    returns: null,
+    reviews: [],
+    rating_avg: null,
+    rating_count: 0,
+    images: { original: product.photo, gemini: shopifyPhoto(product.photo, 1000), thumb: shopifyPhoto(product.photo, 300) },
+    demo_data: false,
+    source: "shopify",
+    store: product.store,
+    product_url: product.product_url,
+    checkout_url: product.cart_url,
+    shipping_note: SHIPPING_NOTE,
+    sizes_in_stock: sizesInStock(product),
+    ticks: brief ? ticksFor(brief, checksFor(product, brief)) : undefined,
+    delivery_date: null,
+    total_price: product.price.selling,
+  };
+}
+
 export async function getProduct(productId: string, sessionId?: string): Promise<ProductDetails> {
   await sleep(300);
+  const live = findLive(productId);
+  if (live) return liveView(live, sessionId ? (loadSessions()[sessionId]?.brief ?? null) : null);
   const product = findProduct(productId);
   if (!product) throw new MockNotFound();
   const brief = sessionId ? (loadSessions()[sessionId]?.brief ?? null) : null;
@@ -953,6 +1138,10 @@ export async function getProduct(productId: string, sessionId?: string): Promise
       thumb: `${BUCKET}/thumb/${product.id}.jpg`,
     },
     demo_data: true,
+    source: "catalog",
+    store: null,
+    product_url: null,
+    checkout_url: null,
     sizes_in_stock: sizesInStock(product),
     ticks: brief ? ticksFor(brief, checksFor(product, brief)) : undefined,
     delivery_date: deliveryDate(product, brief?.pincode ?? loadProfile().pincode),
@@ -960,8 +1149,14 @@ export async function getProduct(productId: string, sessionId?: string): Promise
   };
 }
 
+/** Live stores get a Shopify cart link for the size's variant, or the product page when no size is picked. */
 export async function checkout(request: CheckoutRequest): Promise<CheckoutResponse> {
   await sleep(400);
+  const live = findLive(request.product_id);
+  if (live) {
+    const variant = Object.keys(live.sizes).indexOf(request.size ?? "");
+    return { redirect_url: variant === -1 ? live.product_url : `${live.cart_url}/${live.variant_base + variant}:1` };
+  }
   if (!findProduct(request.product_id)) throw new MockNotFound();
   const params = new URLSearchParams({ product: request.product_id });
   if (request.size) params.set("size", request.size);

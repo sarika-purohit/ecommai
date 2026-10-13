@@ -2,12 +2,27 @@
 
 import { tradeoffAttribute } from "@/lib/labels";
 import { storedValue } from "@/lib/stored";
-import type { BriefChange, DoneEvent, FeedbackAction, MustHave, ResultCard, ShoppingBrief, Tradeoff } from "@/lib/types";
+import type {
+  BriefChange,
+  DoneEvent,
+  FeedbackAction,
+  MustHave,
+  ResultCard,
+  SearchSource,
+  ShoppingBrief,
+  Tradeoff,
+  WebEvent,
+} from "@/lib/types";
+
+/** Where a new search looks until the shopper picks; the agent's default too. */
+export const DEFAULT_SOURCE: SearchSource = "live";
 
 export interface SearchSession {
   sessionId: string;
   requestText: string;
   hasPhoto: boolean;
+  /** Missing on searches started before the choice existed, which searched the catalogue. */
+  source?: SearchSource;
   brief: ShoppingBrief;
   /** The agent's question the shopper chose to skip, so it stays hidden after later edits. */
   dismissedQuestion: string | null;
@@ -23,10 +38,20 @@ export interface StoredResults {
   searchRun: number;
   /** The checklist this search ran with, for tick labels. */
   brief: ShoppingBrief;
+  source?: SearchSource;
   done: DoneEvent;
+  /** "On other sites", when grounding found anything. */
+  web?: WebEvent | null;
 }
 
 export const pincodeStore = storedValue<string>("ecommai.pincode", "local");
+
+/** The shopper's last choice of where to look, used for the next search. */
+export const sourceStore = storedValue<SearchSource>("ecommai.source", "local");
+
+export function sourceOf(search: { source?: SearchSource } | null): SearchSource {
+  return search?.source ?? "catalog";
+}
 
 export const sessionStore = storedValue<SearchSession>("ecommai.session", "session");
 

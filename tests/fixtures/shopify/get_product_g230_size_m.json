@@ -1,0 +1,281 @@
+{
+ "jsonrpc": "2.0",
+ "id": 2,
+ "result": {
+  "structuredContent": {
+   "ucp": {
+    "version": "2026-08-25",
+    "capabilities": {
+     "dev.ucp.shopping.catalog.search": [
+      {
+       "version": "2026-08-25",
+       "spec": "https://ucp.dev/2026-08-25/specification/shopping/catalog/",
+       "schema": "https://ucp.dev/2026-08-25/schemas/shopping/catalog_search.json"
+      }
+     ],
+     "dev.ucp.shopping.catalog.lookup": [
+      {
+       "version": "2026-08-25",
+       "spec": "https://ucp.dev/2026-08-25/specification/shopping/catalog/",
+       "schema": "https://ucp.dev/2026-08-25/schemas/shopping/catalog_lookup.json"
+      }
+     ],
+     "dev.shopify.catalog.global": [
+      {
+       "version": "2026-08-25",
+       "spec": "https://shopify.dev/docs/agents/catalog/global-catalog",
+       "schema": "https://shopify.dev/ucp/schemas/2026-08-25/shopify_catalog_global.json",
+       "extends": [
+        "dev.ucp.shopping.catalog.search",
+        "dev.ucp.shopping.catalog.lookup"
+       ],
+       "requires": {
+        "protocol": {
+         "min": "2026-08-25"
+        }
+       }
+      }
+     ]
+    },
+    "status": "success"
+   },
+   "product": {
+    "id": "gid://shopify/p/DmptlUPpvXkzRbz0yzmrv",
+    "title": "Women's Aline kurti- G230",
+    "description": {
+     "plain": "<p>Buy Swapna Weddings Kurtis at Rs. 649 Product Code: G230</p>"
+    },
+    "rating": {
+     "value": 4.8,
+     "scale_min": 1,
+     "scale_max": 5,
+     "count": 230
+    },
+    "media": [
+     {
+      "type": "image",
+      "url": "https://cdn.shopify.com/s/files/1/0672/8410/7316/files/G230_Black1.jpg",
+      "alt_text": "Women's Aline kurti- G230"
+     }
+    ],
+    "options": [
+     {
+      "name": "Color",
+      "values": [
+       {
+        "label": "Black",
+        "available": true,
+        "exists": true
+       },
+       {
+        "label": "Maroon",
+        "available": true,
+        "exists": true
+       },
+       {
+        "label": "Wine",
+        "available": true,
+        "exists": true
+       }
+      ]
+     },
+     {
+      "name": "Size",
+      "values": [
+       {
+        "label": "XS",
+        "available": false,
+        "exists": true
+       },
+       {
+        "label": "S",
+        "available": false,
+        "exists": true
+       },
+       {
+        "label": "M",
+        "available": true,
+        "exists": true
+       },
+       {
+        "label": "L",
+        "available": true,
+        "exists": true
+       },
+       {
+        "label": "XL",
+        "available": true,
+        "exists": true
+       },
+       {
+        "label": "2XL",
+        "available": true,
+        "exists": true
+       }
+      ]
+     }
+    ],
+    "metadata": {
+     "unique_selling_points": [
+      "Pre-order availability with a wide size range from XS to 3XL for inclusive fit."
+     ],
+     "top_features": [
+      "Soft cotton fabric ensures comfort during all-day wear",
+      "Solid black color offers versatile styling for various occasions",
+      "Short sleeves provide breathability and ease of movement",
+      "Available in sizes XS to 3XL for inclusive sizing",
+      "Pre-order option allows early access for special events"
+     ],
+     "tech_specs": [
+      "Material: 100% Cotton",
+      "Color: Black",
+      "Neckline: V-neck",
+      "Sleeve Length: Short",
+      "Pattern: Solid",
+      "Available Sizes: XS, S, M, L, XL, XXL, 3XL"
+     ]
+    },
+    "variants": [
+     {
+      "id": "gid://shopify/ProductVariant/46385104748001",
+      "title": "Women's Aline kurti- G230",
+      "description": {
+       "plain": "<p>Buy Swapna Weddings Kurtis at Rs. 649 Product Code: G230</p>"
+      },
+      "url": "https://www.swapnawedding.com/products/womens-kurti-g230?variant=46385104748001&_gsid=M1VPnRbrLHUB&utm_source=shopify&utm_medium=catalog",
+      "price": {
+       "amount": 64900,
+       "currency": "INR"
+      },
+      "list_price": {
+       "amount": 99900,
+       "currency": "INR"
+      },
+      "availability": {
+       "available": true
+      },
+      "options": [
+       {
+        "name": "Color",
+        "label": "Maroon"
+       },
+       {
+        "name": "Size",
+        "label": "M"
+       }
+      ],
+      "media": [
+       {
+        "type": "image",
+        "url": "https://cdn.shopify.com/s/files/1/0672/8410/7316/files/G230_Black1.jpg",
+        "alt_text": "Women's Aline kurti- G230"
+       }
+      ],
+      "seller": {
+       "id": "gid://shopify/Shop/67284107316",
+       "name": "Swapna Weddings",
+       "url": "https://www.swapnawedding.com",
+       "domain": "swapna-weddings.myshopify.com",
+       "links": [
+        {
+         "type": "privacy_policy",
+         "url": "https://checkout.shopify.com/67284107316/policies/30103306292.html"
+        }
+       ]
+      },
+      "checkout_url": "https://www.swapnawedding.com/cart/46385104748001:1?_gsid=M1VPnRbrLHUB&utm_source=shopify&utm_medium=catalog",
+      "rating": {
+       "value": 4.5,
+       "scale_min": 1,
+       "scale_max": 5,
+       "count": 262
+      },
+      "condition": [
+       "new"
+      ],
+      "eligible": {
+       "native_checkout": false
+      }
+     },
+     {
+      "id": "gid://shopify/ProductVariant/46385104748002",
+      "title": "Women's Aline kurti- G230",
+      "description": {
+       "plain": "<p>Buy Swapna Weddings Kurtis at Rs. 649 Product Code: G230</p>"
+      },
+      "url": "https://www.swapnawedding.com/products/womens-kurti-g230?variant=46385104748002&_gsid=M1VPnRbrLHUB&utm_source=shopify&utm_medium=catalog",
+      "price": {
+       "amount": 64900,
+       "currency": "INR"
+      },
+      "list_price": {
+       "amount": 99900,
+       "currency": "INR"
+      },
+      "availability": {
+       "available": true
+      },
+      "options": [
+       {
+        "name": "Color",
+        "label": "Black"
+       },
+       {
+        "name": "Size",
+        "label": "M"
+       }
+      ],
+      "media": [
+       {
+        "type": "image",
+        "url": "https://cdn.shopify.com/s/files/1/0672/8410/7316/files/G230_Black1.jpg",
+        "alt_text": "Women's Aline kurti- G230"
+       }
+      ],
+      "seller": {
+       "id": "gid://shopify/Shop/67284107316",
+       "name": "Swapna Weddings",
+       "url": "https://www.swapnawedding.com",
+       "domain": "swapna-weddings.myshopify.com",
+       "links": [
+        {
+         "type": "privacy_policy",
+         "url": "https://checkout.shopify.com/67284107316/policies/30103306292.html"
+        }
+       ]
+      },
+      "checkout_url": "https://www.swapnawedding.com/cart/46385104748002:1?_gsid=M1VPnRbrLHUB&utm_source=shopify&utm_medium=catalog",
+      "rating": {
+       "value": 4.5,
+       "scale_min": 1,
+       "scale_max": 5,
+       "count": 262
+      },
+      "condition": [
+       "new"
+      ],
+      "eligible": {
+       "native_checkout": false
+      }
+     }
+    ],
+    "price_range": {
+     "min": {
+      "amount": 64900,
+      "currency": "INR"
+     },
+     "max": {
+      "amount": 64900,
+      "currency": "INR"
+     }
+    },
+    "selected": [
+     {
+      "name": "Size",
+      "label": "M"
+     }
+    ]
+   }
+  }
+ }
+}

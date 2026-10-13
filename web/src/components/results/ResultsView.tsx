@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowRightIcon, ChevronDownIcon, InfoIcon } from "@/components/icons";
+import { ArrowRightIcon, ChevronDownIcon, InfoIcon, StoreIcon } from "@/components/icons";
+import { OtherSites } from "@/components/results/OtherSites";
 import { ResultCardView } from "@/components/results/ResultCardView";
 import { updateBrief } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
@@ -11,15 +12,21 @@ import { tradeoffLabel } from "@/lib/labels";
 import {
   clearSearch,
   sameRule,
+  sourceOf,
+  sourceStore,
   tradeoffChanges,
   updateSession,
   type SearchSession,
   type StoredResults,
 } from "@/lib/session";
 import { strings } from "@/lib/strings";
-import type { BriefChange, DoneEvent, ShoppingBrief } from "@/lib/types";
+import type { BriefChange, DoneEvent, SearchSource, ShoppingBrief } from "@/lib/types";
 
 const text = strings.results;
+
+export function resultsSummary(done: DoneEvent, source: SearchSource): string {
+  return done.checked === 0 ? text.nothingFound[source] : text.summary(done.checked, done.passed);
+}
 
 interface ResultsViewProps {
   session: SearchSession;
@@ -36,6 +43,8 @@ export function ResultsView({ session, results, focusHeading, onAnnounce }: Resu
   const [error, setError] = useState<string | null>(null);
   const { done, brief } = results;
   const nothing = done.passed === 0;
+  const source = results.source ?? sourceOf(session);
+  const otherSource: SearchSource = source === "live" ? "catalog" : "live";
 
   useEffect(() => {
     if (focusHeading) heading.current?.focus();
@@ -51,12 +60,15 @@ export function ResultsView({ session, results, focusHeading, onAnnounce }: Resu
       let updated = session.brief;
       for (const change of changes) ({ brief: updated } = await updateBrief(session.sessionId, change));
       const switchedOff = changes.flatMap((c) => (c.type === "set_rule" && !c.enabled ? [c.must_have] : []));
+      const newSource = changes.flatMap((c) => (c.type === "set_source" ? [c.source] : [])).pop();
       updateSession((current) => ({
         ...current,
         brief: updated,
+        source: newSource ?? current.source,
         rulesOff: [...current.rulesOff.filter((off) => !switchedOff.some((m) => sameRule(m, off))), ...switchedOff],
         searchRun: current.searchRun + 1,
       }));
+      if (newSource) sourceStore.set(newSource);
       window.scrollTo({ top: 0 });
     } catch (caught) {
       setError(errorMessage(caught));
@@ -75,7 +87,20 @@ export function ResultsView({ session, results, focusHeading, onAnnounce }: Resu
         <h1 ref={heading} tabIndex={-1} className="display text-[2.25rem] focus:outline-none sm:text-[2.75rem]">
           {nothing ? text.noMatchesTitle : text.doneTitle}
         </h1>
-        <p className="mt-2 text-[1.25rem] font-semibold">{text.summary(done.checked, done.passed)}</p>
+        <p className="mt-2 text-[1.25rem] font-semibold">{resultsSummary(done, source)}</p>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-ink-soft">
+          <StoreIcon className="size-5 flex-none text-indigo" />
+          <span>{strings.source.searched[source]}</span>
+          <button
+            type="button"
+            className="link"
+            disabled={busy !== null}
+            aria-busy={busy === "source"}
+            onClick={() => void refine("source", [{ type: "set_source", source: otherSource }])}
+          >
+            {strings.source.switchTo[otherSource]}
+          </button>
+        </p>
       </div>
 
       {done.not_checkable.length > 0 ? (
@@ -122,6 +147,8 @@ export function ResultsView({ session, results, focusHeading, onAnnounce }: Resu
 
       <Rejected done={done} />
 
+      {results.web ? <OtherSites web={results.web} /> : null}
+
       <div className="flex flex-col gap-3">
         <Link href="/understood" className="btn btn-secondary w-full">
           {text.back}
@@ -144,7 +171,7 @@ interface TradeoffsProps {
 function Tradeoffs({ done, brief, busy, onPick }: TradeoffsProps) {
   const titleId = useId();
   if (done.tradeoffs.length === 0) {
-    return done.passed === 0 ? <p className="panel p-5 text-ink-soft">{text.noTradeoffs}</p> : null;
+    return done.passed === 0 && done.checked > 0 ? <p className="panel p-5 text-ink-soft">{text.noTradeoffs}</p> : null;
   }
   return (
     <section aria-labelledby={titleId} className="rounded-[1.25rem] bg-marigold-wash p-5 ring-2 ring-marigold">

@@ -8,15 +8,22 @@ import re
 import threading
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+
+import httpx
 
 from agent import verify
 from agent.app import Backend
 from agent.sessions import Store
-from agent.workflow import Services
+from agent.sources import shopify
+from agent.web_search import WebFindings, WebResult
+from agent.workflow import LiveServices, Services
 from data_prep import schemas
 from data_prep.embed import Embedding
+
+SHOPIFY_FIXTURES = Path(__file__).resolve().parent.parent / "shopify"
 
 # 13 October 2026 is a Tuesday; before 2 pm, so orders ship the same day.
 TUESDAY_10AM = datetime(2026, 10, 13, 10, 0)
@@ -287,6 +294,7 @@ def photo_answer(category: str = "Casual Shoes", gender: str = "men") -> str:
 
 
 PHOTO_ID = re.compile(r"/gemini/(?P<id>[^/.]+)\.jpg$")
+LIVE_PHOTO = re.compile(r"cdn\.shopify\.com/s/files/[\d/]+/files/(?P<name>[^?]+)")
 
 
 def asked_ids(prompt: str) -> list[str]:
@@ -305,7 +313,9 @@ class Checker:
         self.client = FakeClient(self.respond)
 
     def respond(self, contents: list) -> str | Exception:
-        product_id = PHOTO_ID.search(contents[0].file_data.file_uri)["id"]
+        uri = contents[0].file_data.file_uri
+        found = PHOTO_ID.search(uri) or LIVE_PHOTO.search(uri)
+        product_id = found["id"] if "id" in found.groupdict() else found["name"]
         verdict = self.verdicts.get(product_id, {})
         if isinstance(verdict, Exception):
             return verdict
@@ -407,6 +417,73 @@ def services(db: FakeDB, checker: Checker | None = None) -> Services:
     )
 
 
+def shopify_fixture(name: str) -> dict:
+    return json.loads((SHOPIFY_FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def search_products() -> list[dict]:
+    """Shopify's search answer for "women's cotton kurta with pockets" (trimmed), plus one priced in dollars and
+    one without a photo."""
+    return shopify_fixture("search_kurtas.json")["result"]["structuredContent"]["products"]
+
+
+class ShopifyServer:
+    """Answers Global Catalog MCP calls from the fixtures, recording each JSON-RPC body it gets.
+
+    get_product answers with the fixture for the G230 kurta (sized when a size is selected), the search's own copy
+    for other products, and Shopify's not_found message for unknown ids. `fail` holds HTTP statuses to answer first.
+    """
+
+    def __init__(self, products: list[dict] | None = None, fail: list[int] | None = None):
+        self.products = products if products is not None else search_products()
+        self.fail = list(fail or [])
+        self.bodies: list[dict] = []
+        self.lock = threading.Lock()
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        with self.lock:
+            self.bodies.append(body)
+            status = self.fail.pop(0) if self.fail else 200
+        if status != 200:
+            return httpx.Response(status, text="busy")
+        tool, catalog = body["params"]["name"], body["params"]["arguments"]["catalog"]
+        if tool == "search_catalog":
+            content = {"products": copy.deepcopy(self.products)}
+        else:
+            content = self.product(catalog)
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"structuredContent": content}})
+
+    def product(self, catalog: dict) -> dict:
+        if catalog["id"] == "gid://shopify/p/DmptlUPpvXkzRbz0yzmrv":
+            name = "get_product_g230_size_m.json" if catalog.get("selected") else "get_product_g230.json"
+            return shopify_fixture(name)["result"]["structuredContent"]
+        found = next((p for p in self.products if p["id"] == catalog["id"]), None)
+        if found is None:
+            return {"messages": [{"type": "error", "code": "not_found", "content": f"Product not found: {catalog['id']}"}]}
+        return {"product": copy.deepcopy(found)}
+
+    def calls(self, tool: str) -> list[dict]:
+        return [body["params"]["arguments"] for body in self.bodies if body["params"]["name"] == tool]
+
+    def catalog(self) -> shopify.Catalog:
+        return shopify.Catalog(profile=shopify.EXAMPLE_PROFILE, transport=httpx.MockTransport(self.handle),
+                               sleep=lambda seconds: None)
+
+
+def web_findings() -> WebFindings:
+    return WebFindings(
+        results=[WebResult(title="Cotton kurta with side pockets", url="https://vertexaisearch.cloud.google.com/r/1",
+                           site="myntra.com", price_text="₹899", snippet="cotton, pockets")],
+        search_entry_point_html='<style>.chip{color:#1f1f1f}</style><div class="chip">cotton kurta</div>',
+        queries=["women cotton kurta with pockets"],
+    )
+
+
+def live(server: ShopifyServer | None = None, find: Callable | None = None) -> LiveServices:
+    return LiveServices(catalog=(server or ShopifyServer()).catalog(), find_on_web=find)
+
+
 def backend(
     db: FakeDB,
     *,
@@ -414,6 +491,7 @@ def backend(
     brief: Callable[[Any], str | Exception] | None = None,
     photo: Callable[[Any], str | Exception] | None = None,
     links: dict[str, tuple[bytes, str]] | None = None,
+    live_services: LiveServices | None = None,
 ) -> Backend:
     def read_link(url: str) -> tuple[bytes, str]:
         from agent.workflow import PhotoProblem
@@ -429,4 +507,5 @@ def backend(
         photo_client=FakeClient(photo or (lambda contents: photo_answer())),
         read_link=read_link,
         now=lambda: TUESDAY_10AM,
+        live=live_services,
     )

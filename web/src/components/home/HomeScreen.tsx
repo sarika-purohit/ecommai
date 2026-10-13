@@ -6,9 +6,10 @@ import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } 
 import { AppHeader } from "@/components/AppHeader";
 import { PincodeCard } from "@/components/home/PincodeCard";
 import { ArrowRightIcon, CameraIcon, CloseIcon } from "@/components/icons";
+import { SourceChoice } from "@/components/SourceChoice";
 import { createBrief } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
-import { pincodeStore, sessionStore } from "@/lib/session";
+import { DEFAULT_SOURCE, pincodeStore, sessionStore, sourceStore } from "@/lib/session";
 import { strings } from "@/lib/strings";
 
 const text = strings.home;
@@ -23,6 +24,7 @@ type Example = (typeof text.examples)[number];
 export function HomeScreen() {
   const router = useRouter();
   const pincode = pincodeStore.use();
+  const source = sourceStore.use() ?? DEFAULT_SOURCE;
   const [request, setRequest] = useState("");
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [waitingForPhoto, setWaitingForPhoto] = useState<string | null>(null);
@@ -70,11 +72,13 @@ export function HomeScreen() {
         image: image ?? undefined,
         pincode,
         language: strings.language,
+        source,
       });
       sessionStore.set({
         sessionId: response.session_id,
         requestText: trimmed,
         hasPhoto: Boolean(image),
+        source,
         brief: { ...response.brief, question: response.question ?? response.brief.question ?? null },
         dismissedQuestion: null,
         rulesOff: [],
@@ -185,6 +189,8 @@ export function HomeScreen() {
               />
             </div>
           </div>
+
+          <SourceChoice value={source} onChange={(next) => sourceStore.set(next)} disabled={submitting} />
 
           {error ? (
             <p id={errorId} role="alert" className="field-error -mt-1">

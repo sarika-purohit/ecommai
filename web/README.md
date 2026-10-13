@@ -35,20 +35,25 @@ Before a pull request: `npm run lint`, `npx tsc --noEmit` and `npm run build`.
 
 | Route | Screen |
 |---|---|
-| `/` | Sign-in, then home: the request box, photo and example chips |
-| `/understood` | "Here's what I understood": the checklist as editable chips, locked rule chips, one question |
-| `/results` | Live checking (thumbnails stamped pass, fail or not sure as checks land), then the results: cards with total price, delivery date and the tick-list; tap a tick for its proof. Below: "what to give up" (one tap edits the checklist and searches again), `cheaper` / `more formal` / `different colour`, the ones we couldn't fully confirm, and why others were rejected |
-| `/product/<id>` | Every photo size, every tick with proof, reviews (flagged ones hidden behind "hidden: suspicious"), size picker, "Buy on store" |
+| `/` | Sign-in, then home: the request box, photo, where to look ("Live stores" or "Demo catalogue", remembered in this browser) and example chips |
+| `/understood` | "Here's what I understood": the checklist as editable chips, locked rule chips, one question, and where to look (`set_source`) |
+| `/results` | Live checking (thumbnails stamped pass, fail or not sure as checks land), then the results: cards with total price, delivery date and the tick-list; tap a tick for its proof. Below: "what to give up" (one tap edits the checklist and searches again), `cheaper` / `more formal` / `different colour`, the ones we couldn't fully confirm, why others were rejected, and "On other sites" (Grounding with Google Search, not checked by us). A link under the summary searches the other source |
+| `/product/<id>` | Every photo size, every tick with proof, reviews (flagged ones hidden behind "hidden: suspicious"), size picker, "Buy on store". Live products (ids are Shopify GIDs, URL-encoded) show the store and its page, no reviews, and "Buy on <store>" opens the store in a new tab |
 | `/checkout?product=&size=` | The demo store's checkout. Clearly labelled; no payment, nothing delivered |
 | `/profile` | Pincode, my rules (same chip words as the checklist), what we've learned with a clear button, "Delete my data", sign out |
 
 Photo proof scales `box_2d` (`[ymin, xmin, ymax, xmax]` on 0-1000) onto the photo as shown and dims everything around it. A missing or invalid box shows the whole photo with a note.
 
+"On other sites" follows Google's display rules for Search Suggestions: `search_entry_point_html` is rendered unchanged in a sandboxed `srcdoc` iframe (no scripts; `allow-popups allow-popups-to-escape-sandbox` and `<base target="_blank">`, so a tapped chip opens Google's results in a new tab), as wide as the list, whenever the panel shows. The panel sits below our own results, never mixed in.
+
 ## Without Firebase or the agent
 
 - **No Firebase settings:** `npm run dev` shows a "Continue in demo mode" button that skips sign-in. Production builds without them show a configuration error instead.
-- **Mock mode** (`NEXT_PUBLIC_USE_MOCK=1`, or no `NEXT_PUBLIC_API_BASE_URL`): `src/lib/mock.ts` answers every endpoint offline, using 24 real catalogue products in `src/lib/mock-catalog.ts` (12 kurtas, 12 watches, with real photos, shop data, reviews and careful-check boxes). Checks follow each product's saved details; ranking and "what to give up" follow `agent/rank.py` and `agent/tradeoffs.py`, so the counts on a trade-off card match what one tap gives. It's lazy-loaded, so real builds don't ship it. Things to try:
-  - "Cotton kurta with pockets under ₹1,200": five matches, one we couldn't confirm, a near-duplicate left out. Tap "Pockets" on the white Fabindia kurta for the photo proof.
+- **Mock mode** (`NEXT_PUBLIC_USE_MOCK=1`, or no `NEXT_PUBLIC_API_BASE_URL`): `src/lib/mock.ts` answers every endpoint offline, using 24 real catalogue products in `src/lib/mock-catalog.ts` (12 kurtas, 12 watches, with real photos, shop data, reviews and careful-check boxes) for "Demo catalogue", and three Shopify-shaped products in `src/lib/mock-live.ts` (two kurtas, one pair of sneakers, photos on cdn.shopify.com) plus an "On other sites" list for "Live stores". Checks follow each product's saved details; ranking and "what to give up" follow `agent/rank.py` and `agent/tradeoffs.py`, so the counts on a trade-off card match what one tap gives. It's lazy-loaded, so real builds don't ship it. Things to try:
+  - Live stores (the default), "Cotton kurta with pockets under ₹1,200": two live kurtas, both unsure only about cash on delivery (live stores keep payment to their own checkout), so "what to give up" offers switching off the COD rule; tap it for two matches. Tap "Pockets" for a quote from the store's description (add "three-quarter sleeves" to see a box on the store's photo), and "Buy on Lilium" to open the store in a new tab (its cart in your size once you've answered the size question, otherwise the product page). "On other sites" lists Amazon.in, Flipkart and Myntra under a stand-in for Google's suggestion chips.
+  - Live stores, the watch example: no live store has it, so only "On other sites" shows, with a link to search the demo catalogue instead.
+  - Live stores, "White sneakers under ₹3,000": the one pair of sneakers in the mock.
+  - Demo catalogue, "Cotton kurta with pockets under ₹1,200": five matches, one we couldn't confirm, a near-duplicate left out. Tap "Pockets" on the white Fabindia kurta for the photo proof. The rest of these use the demo catalogue too.
   - Add "three-quarter sleeves": nothing matches, so the "what to give up" card offers dropping sleeves.
   - "I saw someone wearing…" (green dial, steel strap): nothing matches; dropping the dial colour gives eight.
   - Add "not see-through": every kurta is unclear, with review proof.

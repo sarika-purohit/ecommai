@@ -20,12 +20,15 @@ interface TickListProps {
   ticks: Tick[];
   /** The checklist the ticks belong to, so they read the same as its chips. */
   brief: ShoppingBrief | null;
-  /** The gemini/ photo the careful check looked at; box_2d is relative to it. */
+  /** The photo the careful check looked at (gemini/ size, or the store's photo); box_2d is relative to it. */
   photo: string | null;
+  /** A live store's product: proof comes from the store's photo and description, never demo reviews. */
+  live?: boolean;
+  store?: string | null;
 }
 
 /** The tick-list: one tag per must-have. Tapping one opens its proof underneath. */
-export function TickList({ ticks, brief, photo }: TickListProps) {
+export function TickList({ ticks, brief, photo, live = false, store = null }: TickListProps) {
   const [open, setOpen] = useState<string | null>(null);
   const proofId = useId();
   const openTick = ticks.find((tick) => tick.must_have_id === open) ?? null;
@@ -69,6 +72,8 @@ export function TickList({ ticks, brief, photo }: TickListProps) {
             label={tickLabel(openTick, brief)}
             attribute={attributeOf(openTick)}
             photo={photo}
+            live={live}
+            store={store}
           />
         ) : null}
       </div>
@@ -76,8 +81,10 @@ export function TickList({ ticks, brief, photo }: TickListProps) {
   );
 }
 
-function sourceLine(evidence: Evidence, attribute: string | null): string {
-  if (evidence.type === "image") return text.fromPhoto;
+/** Null when there's nothing to point at, e.g. a live store's general note on payment with no quote. */
+function sourceLine(evidence: Evidence, attribute: string | null, live: boolean, store: string | null): string | null {
+  if (evidence.type === "image") return live ? text.fromStorePhoto : text.fromPhoto;
+  if (evidence.type === "details" && live) return evidence.quote ? text.fromStoreDescription(store) : null;
   if (evidence.type === "details") return text.fromListing;
   if (evidence.type === "reviews") return text.fromReviews;
   return attribute && SHOP_DETAILS.has(attribute) ? text.fromStore : text.fromNoted;
@@ -88,10 +95,13 @@ interface ProofProps {
   label: string;
   attribute: string | null;
   photo: string | null;
+  live: boolean;
+  store: string | null;
 }
 
-function Proof({ tick, label, attribute, photo }: ProofProps) {
+function Proof({ tick, label, attribute, photo, live, store }: ProofProps) {
   const { evidence } = tick;
+  const source = evidence ? sourceLine(evidence, attribute, live, store) : null;
   return (
     <section className="mt-3 rounded-2xl bg-paper p-4 ring-1 ring-line" aria-label={text.tick(label, strings.status[tick.status])}>
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -104,9 +114,9 @@ function Proof({ tick, label, attribute, photo }: ProofProps) {
         <>
           {evidence.note ? <p className="mt-2 leading-snug">{evidence.note}</p> : null}
           {evidence.type === "image" ? <PhotoProof photo={photo} box={validBox(evidence.box_2d)} label={label} /> : null}
-          {evidence.type === "reviews" ? <ReviewProof evidence={evidence} /> : null}
+          {evidence.type === "reviews" ? <ReviewProof evidence={evidence} demo={!live} /> : null}
           {evidence.type !== "reviews" && evidence.quote ? <Quote>{evidence.quote}</Quote> : null}
-          <p className="mt-3 text-base text-ink-soft">{sourceLine(evidence, attribute)}</p>
+          {source ? <p className="mt-3 text-base text-ink-soft">{source}</p> : null}
         </>
       )}
     </section>
@@ -166,7 +176,7 @@ function Quote({ children }: { children: string }) {
   );
 }
 
-function ReviewProof({ evidence }: { evidence: Evidence }) {
+function ReviewProof({ evidence, demo }: { evidence: Evidence; demo: boolean }) {
   const agree = evidence.agree ?? 0;
   const disagree = evidence.disagree ?? 0;
   const total = agree + disagree;
@@ -182,9 +192,11 @@ function ReviewProof({ evidence }: { evidence: Evidence }) {
           </div>
         </div>
       ) : null}
-      <p className="mt-3">
-        <span className="demo-badge">{text.demoReviews}</span>
-      </p>
+      {demo ? (
+        <p className="mt-3">
+          <span className="demo-badge">{text.demoReviews}</span>
+        </p>
+      ) : null}
     </div>
   );
 }

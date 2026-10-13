@@ -2,15 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { CheckIcon, ChevronDownIcon, ExternalIcon, ShieldIcon } from "@/components/icons";
 import { ScreenPlaceholder } from "@/components/NoSession";
 import { TickList } from "@/components/proof/TickList";
-import { checkout, getProduct, sendFeedback } from "@/lib/api";
+import { getProduct } from "@/lib/api";
+import { useBuy } from "@/lib/buy";
 import { canRetry, errorMessage } from "@/lib/errors";
 import { rupees, shortDay } from "@/lib/format";
+import { webLink } from "@/lib/links";
 import { totalNote } from "@/lib/price";
 import { findCard, pincodeStore, resultsStore, sessionStore } from "@/lib/session";
 import { useIsClient } from "@/lib/stored";
@@ -105,18 +106,22 @@ function sizesInStock(product: ProductDetails): string[] {
 }
 
 function Product({ product, sessionId, briefs }: { product: ProductDetails; sessionId: string | undefined; briefs: Briefs }) {
-  const router = useRouter();
   const card = findCard(product.id);
   const brief = briefs.session;
+  const live = product.source === "shopify";
+  const store = product.store ?? card?.store ?? null;
+  const storePage = webLink(product.product_url ?? card?.product_url);
   const pincode = brief?.pincode ?? pincodeStore.get();
   const inStock = sizesInStock(product);
   const outOfStock = Object.keys(product.sizes).filter((size) => !inStock.includes(size));
   const oneSize = inStock.length === 1 && inStock[0] === ONE_SIZE;
+  /** A live store that lists no sizes at all lets the shopper pick one on its own page. */
+  const sizeAtStore = live && Object.keys(product.sizes).length === 0 && inStock.length === 0;
   const wanted = brief?.size ? inStock.find((size) => size.toLowerCase() === brief.size?.toLowerCase()) : undefined;
   const [size, setSize] = useState<string | null>(oneSize ? ONE_SIZE : (wanted ?? null));
   const [sizeError, setSizeError] = useState(false);
-  const [buying, setBuying] = useState(false);
-  const [buyError, setBuyError] = useState<string | null>(null);
+  const { state: buyState, buy: startBuy } = useBuy(product.id, sessionId);
+  const buying = buyState.status === "opening";
   const sizeGroup = useRef<HTMLFieldSetElement>(null);
 
   const selling = product.price?.selling ?? null;
@@ -127,25 +132,16 @@ function Product({ product, sessionId, briefs }: { product: ProductDetails; sess
   const photo = product.images?.gemini ?? card?.photo ?? null;
   const original = product.images?.original ?? card?.original ?? null;
   const mrp = product.price && product.price.mrp > product.price.selling ? product.price.mrp : null;
+  const shipping = product.shipping_note ?? card?.shipping_note ?? strings.card.liveShipping;
+  const buyLabel = live ? strings.card.buyOn(store) : text.buy;
 
-  async function buy() {
-    if (!size) {
+  function buy() {
+    if (!size && !sizeAtStore) {
       setSizeError(true);
       sizeGroup.current?.querySelector("input")?.focus();
       return;
     }
-    setBuying(true);
-    setBuyError(null);
-    try {
-      const { redirect_url } = await checkout(product.id, size);
-      if (sessionId) void sendFeedback(sessionId, product.id, "buy").catch(() => undefined);
-      const url = new URL(redirect_url, window.location.origin);
-      if (url.origin === window.location.origin) router.push(`${url.pathname}${url.search}`);
-      else window.location.assign(url.href);
-    } catch (caught) {
-      setBuyError(errorMessage(caught));
-      setBuying(false);
-    }
+    void startBuy(size);
   }
 
   return (
@@ -187,14 +183,27 @@ function Product({ product, sessionId, briefs }: { product: ProductDetails; sess
                 </span>
               ) : null}
             </p>
-            <p className="text-ink-soft">{totalNote(priced)}</p>
+            <p className="text-ink-soft">{live ? text.beforeShipping : totalNote(priced)}</p>
           </div>
         ) : null}
 
         <dl className="mt-4 divide-y divide-line rounded-2xl bg-card px-4 ring-1 ring-line">
+          {live && store ? (
+            <Fact label={text.factStore}>
+              {storePage ? (
+                <a href={storePage} target="_blank" rel="noopener noreferrer" className="link -my-2 justify-end">
+                  {store}
+                  <ExternalIcon className="size-4 flex-none" />
+                  <span className="sr-only">{strings.common.newTab}</span>
+                </a>
+              ) : (
+                store
+              )}
+            </Fact>
+          ) : null}
           <Fact label={text.factDelivery}>
-            {deliveryDate ? text.arrivesBy(shortDay(deliveryDate)) : strings.card.noDate}
-            {deliveryDate && pincode ? ` ${text.deliverTo(pincode)}` : null}
+            {live ? shipping : deliveryDate ? text.arrivesBy(shortDay(deliveryDate)) : strings.card.noDate}
+            {!live && deliveryDate && pincode ? ` ${text.deliverTo(pincode)}` : null}
           </Fact>
           {product.returns ? (
             <Fact label={text.factReturns}>
@@ -214,12 +223,14 @@ function Product({ product, sessionId, briefs }: { product: ProductDetails; sess
 
       {ticks.length > 0 ? (
         <Section title={text.checklist} hint={strings.results.proofHint}>
-          <TickList ticks={ticks} brief={tickBrief} photo={photo} />
+          <TickList ticks={ticks} brief={tickBrief} photo={photo} live={live} store={store} />
         </Section>
       ) : null}
 
       <Section title={text.size}>
-        {inStock.length === 0 ? (
+        {sizeAtStore ? (
+          <p className="text-ink-soft">{text.sizeAtStore}</p>
+        ) : inStock.length === 0 ? (
           <p className="text-ink-soft">{text.soldOut}</p>
         ) : oneSize ? (
           <p className="font-semibold">{text.oneSize}</p>
@@ -238,7 +249,7 @@ function Product({ product, sessionId, briefs }: { product: ProductDetails; sess
         {outOfStock.length > 0 && !oneSize ? <p className="text-base text-ink-soft">{text.outOfStock(outOfStock)}</p> : null}
       </Section>
 
-      <Reviews product={product} />
+      {live ? null : <Reviews product={product} />}
 
       {product.description ? (
         <Section title={text.about}>
@@ -248,9 +259,9 @@ function Product({ product, sessionId, briefs }: { product: ProductDetails; sess
 
       <div className="fixed inset-x-0 bottom-0 z-10 bg-gradient-to-t from-paper from-70% to-transparent pb-[max(1rem,env(safe-area-inset-bottom))] pt-6">
         <div className="shell">
-          {buyError ? (
+          {buyState.status === "error" ? (
             <p role="alert" className="field-error mb-2">
-              {buyError}
+              {buyState.message}
             </p>
           ) : null}
           {sizeError ? (
@@ -258,16 +269,29 @@ function Product({ product, sessionId, briefs }: { product: ProductDetails; sess
               {text.pickSize}
             </p>
           ) : null}
-          <button
-            type="button"
-            className="btn btn-primary w-full"
-            onClick={() => void buy()}
-            disabled={buying || inStock.length === 0}
-            aria-busy={buying}
-          >
-            {buying ? text.buying : text.buy}
-            {buying || total === null ? null : <span className="font-body text-[1.0625rem] font-medium opacity-85">· {rupees(total)}</span>}
-          </button>
+          <p role="status" className={buyState.status === "opened" ? "mb-2 text-base leading-snug text-ink-soft" : "sr-only"}>
+            {buyState.status === "opened" ? strings.card.opened : null}
+          </p>
+          {buyState.status === "opened" ? (
+            <a href={buyState.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary w-full">
+              {buyLabel}
+              <ExternalIcon className="size-5 flex-none" />
+              <span className="sr-only">{strings.common.newTab}</span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary w-full"
+              onClick={buy}
+              disabled={buying || (inStock.length === 0 && !sizeAtStore)}
+              aria-busy={buying}
+            >
+              {buying ? text.buying : buyLabel}
+              {live && !buying ? <ExternalIcon className="size-5 flex-none" /> : null}
+              {live && !buying ? <span className="sr-only">{strings.common.newTab}</span> : null}
+              {buying || total === null ? null : <span className="font-body text-[1.0625rem] font-medium opacity-85">· {rupees(total)}</span>}
+            </button>
+          )}
         </div>
       </div>
     </article>

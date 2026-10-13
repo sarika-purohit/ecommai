@@ -383,6 +383,11 @@ html[data-returning] [data-signin-screen] {
     outline-offset: 2px;
   }
 
+  .segmented input:disabled + label {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
   .switch-button {
     display: inline-flex;
     flex: none;

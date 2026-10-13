@@ -43,6 +43,7 @@ This is the step-by-step guide for building EcommAI. `PLAN.md` explains **what**
  - the app also runs on Cloud Run (`ecommai-web`), deployed with one command (`python -m scripts.deploy web`). We planned Firebase App Hosting, but it needs the GitHub repo connected through the Firebase console plus a Firebase CLI login. Cloud Run meets the competition rules too;
  - the browser calls the agent directly, so the live checking stream isn't held up.
 - **File names, data formats and endpoints:** follow the developer appendix in `PLAN.md` (data formats, API endpoints, Firestore layout, repo layout, detail vocabulary). If this file and `PLAN.md` ever disagree, fix the wrong one in the same pull request.
+- **Live stores are the default search** (step 2.11): Shopify's Global Catalog through Google's UCP, plus an "On other sites" section from Gemini with Google Search. Both are official channels; we never scrape a shopping site. The demo catalogue stays available for the stage stories.
 - **Delivery dates** come from India Post's public pincode list (step 2.7).
 - **Demo prices, fees and return rules** are listed in step 1.5.
 
@@ -638,6 +639,41 @@ Write `agent/learn.py`:
 - **Live address:** https://ecommai-agent-v54j7fs5ma-el.a.run.app.
 - **Smoke test:** health 200, no token 401, sign-in check from our address allowed, other websites refused, and about 90 ms per warm request.
 - **Still to test:** the signed-in full search needs a real Google sign-in from the deployed web app (step 3.8).
+
+### 2.11 Live stores and "On other sites"
+
+**Build**
+1. **`agent/sources/shopify.py`:** a small UCP client for Shopify's Global Catalog (`search_catalog`, `get_product`). It asks for products that ship within India from Indian stores, within the budget plus 20%, in the shopper's size. It sends our UCP agent profile, served at `/.well-known/ucp`.
+2. **The live pipeline in `agent/workflow.py`:**
+ - Shopify search, then a light quick check (price and size only), then the careful check on the store's photo and description (8 s deadline), then ranking and "what to give up".
+ - Cash on delivery, returns and delivery dates become "check at the store's checkout" notes instead of blocking matches.
+ - "Buy" opens the store's own checkout or product page.
+3. **`agent/web_search.py`:** one Gemini Flash call with Grounding with Google Search for the "On other sites" section. It keeps only links Google returned and passes Google's search chip HTML through unchanged.
+4. **Shopify's terms:** we keep only product IDs and our verdicts, never the stores' data. Photos are linked, not copied. Store links are used as returned. Saved live checks expire after 24 hours (Firestore expiry policy on `checks.expires_at`).
+
+**Test it**
+- Locally: offline tests with recorded Shopify responses.
+- In Docker: three live searches end to end.
+
+**Check before moving on**
+- [x] Live searches return real products from Indian stores, with proof on the store's photo or description
+- [x] Shop details live stores don't share never block a match
+- [x] "On other sites" shows only links Google returned, with Google's search chip unchanged
+- [ ] A signed-in live search on the deployed app, from a phone
+
+**What we found:**
+
+| Search | Result | Search time after the checklist |
+|---|---|---|
+| Watch | 5 matches (Giordano, Casio and others), each with the black dial and steel bracelet boxed on the store's photo | 12 s |
+| Kurta | 1 match (an Olive Moss cotton kurti, with "Functional side pockets" quoted from the store's description) and 2 "almost" | 8 s |
+| Sneakers | 0 matches: every pair shows a logo, boxed on the photo. "Drop no logo" offers 10 | 6.5 s |
+
+- **Indian stores only:** restricting to Indian stores matters. Without it, foreign stores appear with wrong rupee prices.
+- **Model choice:** the Google Search section stays on Flash, because Flash-Lite invented links.
+- **Not built yet:**
+ - photo search in live mode (Shopify supports image search);
+ - live search inside the ADK agent and MCP tools.
 
 ---
 

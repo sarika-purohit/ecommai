@@ -16,6 +16,7 @@ import {
   RupeeIcon,
 } from "@/components/icons";
 import { NoSession, ScreenPlaceholder } from "@/components/NoSession";
+import { SourceChoice } from "@/components/SourceChoice";
 import { Tag } from "@/components/Tag";
 import { FieldEditor, MustHaveEditor } from "@/components/understood/Editors";
 import { QuestionCard } from "@/components/understood/QuestionCard";
@@ -23,10 +24,10 @@ import { updateBrief } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { isValidPincode, rupees, shortDay, todayInIndia } from "@/lib/format";
 import { categoryLabel, mustHaveLabel, niceToHaveLabel } from "@/lib/labels";
-import { openQuestion, sameRule, sessionStore, updateSession, type SearchSession } from "@/lib/session";
+import { openQuestion, sameRule, sessionStore, sourceOf, sourceStore, updateSession, type SearchSession } from "@/lib/session";
 import { useIsClient } from "@/lib/stored";
 import { strings } from "@/lib/strings";
-import type { BriefChange, MustHave } from "@/lib/types";
+import type { BriefChange, MustHave, SearchSource } from "@/lib/types";
 
 const text = strings.understood;
 const labels = strings.labels;
@@ -68,6 +69,7 @@ function Checklist({ session }: { session: SearchSession }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<Status>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [pendingSource, setPendingSource] = useState<SearchSource | null>(null);
 
   const { brief } = session;
   const own = brief.must_haves.filter((m) => !m.from_rule);
@@ -106,6 +108,13 @@ function Checklist({ session }: { session: SearchSession }) {
         ? next.rulesOff.filter((off) => !sameRule(off, mustHave))
         : [...next.rulesOff.filter((off) => !sameRule(off, mustHave)), mustHave],
     }));
+  }
+
+  async function switchSource(source: SearchSource) {
+    setPendingSource(source);
+    await apply({ type: "set_source", source }, "source", (next) => ({ ...next, source }));
+    if (sessionStore.get()?.source === source) sourceStore.set(source);
+    setPendingSource(null);
   }
 
   function findMatches() {
@@ -347,6 +356,15 @@ function Checklist({ session }: { session: SearchSession }) {
             }
           />
         </ul>
+      </Section>
+
+      <Section title={strings.source.legend} hint={strings.source.checklistHint}>
+        <SourceChoice
+          value={pendingSource ?? sourceOf(session)}
+          onChange={(source) => void switchSource(source)}
+          disabled={busy}
+          editKey="source"
+        />
       </Section>
 
       <p role="status" aria-live="polite" className="min-h-6 text-base text-ink-soft">

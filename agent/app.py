@@ -7,6 +7,10 @@ Run locally (AUTH_MODE=dev lets requests without a sign-in token act as a demo s
 Every /api/* endpoint needs `Authorization: Bearer <Firebase ID token>`. POST /api/search answers with server-sent
 events (see agent/workflow.py for the order); comment lines (": ping") keep the stream open while products are
 checked. Only the origins in ALLOWED_ORIGINS may call it from a browser.
+
+A search looks in live Shopify stores (source 'live', the default) or our demo catalogue ('catalog'). Live product
+ids are Shopify ids ('gid://shopify/p/...'); their product page and checkout fetch them fresh from Shopify, and
+checkout sends the shopper to the store's own checkout. GET /.well-known/ucp serves our UCP agent profile (public).
 """
 
 import asyncio
@@ -32,8 +36,9 @@ from agent import auth, cards, delivery, workflow
 from agent import brief as briefs
 from agent.auth import User, current_user
 from agent.learn import update_taste
-from agent.models import MustHave, Rule, ShoppingBrief
+from agent.models import MustHave, Product, Rule, ShoppingBrief
 from agent.sessions import SessionDoc, Store, UserDoc, default_store
+from agent.sources import shopify
 from data_prep.simulate import ONE_SIZE
 
 log = logging.getLogger(__name__)
@@ -46,6 +51,10 @@ LANGUAGE_PATTERN = r"^[A-Za-z-]{2,16}$"
 NOT_FOUND_SESSION = "We couldn't find that search. Please start a new one."
 NOT_FOUND_PRODUCT = "We couldn't find that product."
 BUSY = "Our AI is busy right now. Please try again in a moment."
+STORE_BUSY = "We couldn't reach the store right now. Please try again in a moment."
+LIVE_NEEDS_SEARCH = "Please open live store products from a search."
+NO_LONGER_AVAILABLE = "This product isn't available at the store any more."
+PROFILE_CACHE = "public, max-age=3600"
 
 
 @dataclass
@@ -56,11 +65,13 @@ class Backend:
     photo_client: Any = None
     read_link: Callable[[str], tuple[bytes, str]] = workflow.fetch_link
     now: Callable[[], datetime | None] = field(default=lambda: None)
+    live: workflow.LiveServices | None = None
 
 
 @cache
 def default_backend() -> Backend:
-    return Backend(store=default_store(), services=workflow.default_services())
+    services = workflow.default_services()
+    return Backend(store=default_store(), services=services, live=workflow.default_live(services))
 
 
 def backend_of(request: Request) -> Backend:
@@ -77,6 +88,7 @@ class BriefRequest(BaseModel):
     image_mime_type: str | None = Field(default=None, max_length=50)
     pincode: str = Field(max_length=12)
     language: str = Field(default="en", max_length=16)
+    source: workflow.Source = "live"
 
 
 class BriefResponse(BaseModel):
@@ -139,8 +151,9 @@ class MeUpdate(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    product_id: str
-    size: str | None = Field(default=None, max_length=20)
+    product_id: str = Field(max_length=200)
+    size: str | None = Field(default=None, max_length=40)
+    session_id: str | None = Field(default=None, description="For a live product, whose pincode to use")
 
 
 class CheckoutResponse(BaseModel):
@@ -206,6 +219,11 @@ def health() -> dict:
     return {"ok": True}
 
 
+@router.get("/.well-known/ucp")
+def ucp_profile() -> JSONResponse:
+    return JSONResponse(shopify.agent_profile(), headers={"Cache-Control": PROFILE_CACHE})
+
+
 @router.post("/api/brief", response_model=BriefResponse)
 def make_brief(body: BriefRequest, user: User = Depends(current_user), backend: Backend = Depends(backend_of)):
     pincode = checked_pincode(body.pincode)
@@ -249,7 +267,7 @@ def make_brief(body: BriefRequest, user: User = Depends(current_user), backend: 
             log.exception("photo upload failed")
             raise HTTPException(503, "We couldn't save your photo. Please try again.") from error
     brief = outcome.brief.model_copy(update={"reference_image_url": photo})
-    session = store.new_session(user.uid, brief, query_text=text, rules=profile.rules, photo=photo)
+    session = store.new_session(user.uid, brief, query_text=text, rules=profile.rules, photo=photo, source=body.source)
     if not profile.pincode:
         store.update_user(user.uid, {"pincode": pincode})
     return BriefResponse(session_id=session.id, brief=brief, question=brief.question)
@@ -283,8 +301,10 @@ def update_brief(body: BriefUpdateRequest, user: User = Depends(current_user), b
     session.disabled_rules = sorted(edited.disabled)
     if edited.words:
         session.query_text = ". ".join(part for part in (session.query_text, edited.words) if part)
+    if edited.source:
+        session.source = edited.source
     session.history = [*session.history, {"change": body.change.model_dump(mode="json")}][-MAX_HISTORY:]
-    backend.store.update_session(session, ["brief", "rules", "disabled_rules", "query_text", "history"])
+    backend.store.update_session(session, ["brief", "rules", "disabled_rules", "query_text", "history", "source"])
     return BriefUpdateResponse(brief=edited.brief)
 
 
@@ -329,6 +349,9 @@ async def search(body: SearchRequest, user: User = Depends(current_user), backen
 
 def run_search(backend: Backend, session: SessionDoc, profile: UserDoc, emit: workflow.Emit) -> None:
     """Search, then save the results; the shopper's photo is deleted once its embedding is saved."""
+    if session.source == "live":
+        run_live_search(backend, session, profile, emit)
+        return
     store = backend.store
     photo = None
     if session.photo or session.photo_vector:
@@ -353,17 +376,52 @@ def run_search(backend: Backend, session: SessionDoc, profile: UserDoc, emit: wo
     store.update_session(session, names)
 
 
+def run_live_search(backend: Backend, session: SessionDoc, profile: UserDoc, emit: workflow.Emit) -> None:
+    """A live search keeps only our verdicts and the Shopify ids it showed (Shopify's terms forbid caching results)."""
+    outcome = workflow.live_search(
+        session.brief, query_text=session.query_text, services=backend.services, live=live_of(backend),
+        taste=profile.taste, emit=emit,
+    )
+    session.results = workflow.live_summary(outcome.done)
+    session.timings = outcome.timings
+    session.live_ids = outcome.live_ids
+    backend.store.update_session(session, ["results", "timings", "live_ids"])
+
+
+def live_of(backend: Backend) -> workflow.LiveServices:
+    if backend.live is None:
+        raise RuntimeError("live store search isn't set up")
+    return backend.live
+
+
 def read_photo(backend: Backend, link: str) -> tuple[bytes, str]:
     if backend.store.is_upload(link):
         return backend.store.read_photo(link)
     return backend.read_link(link)
 
 
-@router.get("/api/products/{product_id}")
+def live_product(backend: Backend, session: SessionDoc, product_id: str) -> Product:
+    """The live product as its store shows it now, fetched fresh from Shopify."""
+    try:
+        return live_of(backend).catalog.get_product(product_id, session.brief)
+    except shopify.CatalogError as error:
+        raise store_problem(error) from error
+    except ValueError as error:
+        raise HTTPException(404, NO_LONGER_AVAILABLE) from error
+
+
+@router.get("/api/products/{product_id:path}")
 def product(
     product_id: str, session_id: str | None = None, user: User = Depends(current_user),
     backend: Backend = Depends(backend_of),
 ):
+    if shopify.is_live_id(product_id):
+        if not session_id:
+            raise bad_request(LIVE_NEEDS_SEARCH)
+        session = own_session(backend, user, session_id)
+        found = live_product(backend, session, product_id)
+        ticks = workflow.saved_ticks(session.brief, found, backend.services.check_cache)
+        return JSONResponse(cards.product_view(found, ticks))
     found = backend.store.product(product_id)
     if found is None:
         raise HTTPException(404, NOT_FOUND_PRODUCT)
@@ -395,21 +453,23 @@ def feedback(body: FeedbackRequest, user: User = Depends(current_user), backend:
     store = backend.store
     session = own_session(backend, user, body.session_id)
     liked = body.action != "dislike"
-    found = store.product(body.product_id, with_embedding=liked)
-    if found is None:
+    live = shopify.is_live_id(body.product_id)
+    found = None if live else store.product(body.product_id, with_embedding=liked)
+    if found is None and not live:
         raise HTTPException(404, NOT_FOUND_PRODUCT)
+    product_id = found.id if found else body.product_id
     profile = store.user(user.uid)
-    likes = [p for p in profile.likes if p != found.id]
-    dislikes = [p for p in profile.dislikes if p != found.id]
-    (likes if liked else dislikes).append(found.id)
+    likes = [p for p in profile.likes if p != product_id]
+    dislikes = [p for p in profile.dislikes if p != product_id]
+    (likes if liked else dislikes).append(product_id)
     fields: dict[str, Any] = {"likes": likes, "dislikes": dislikes}
-    if liked and found.embedding:
+    if liked and found and found.embedding:
         try:
             fields["taste"] = update_taste(profile.taste, found.article_type, found.embedding, body.action)
         except ValueError as error:
             log.warning("product %s: style not updated: %s", found.id, error)
     store.update_user(user.uid, fields)
-    session.feedback = [*session.feedback, {"product_id": found.id, "action": body.action}]
+    session.feedback = [*session.feedback, {"product_id": product_id, "action": body.action}]
     store.update_session(session, ["feedback"])
     return Ok()
 
@@ -449,6 +509,8 @@ def clear_taste(user: User = Depends(current_user), backend: Backend = Depends(b
 
 @router.post("/api/checkout", response_model=CheckoutResponse)
 def checkout(body: CheckoutRequest, user: User = Depends(current_user), backend: Backend = Depends(backend_of)):
+    if shopify.is_live_id(body.product_id):
+        return CheckoutResponse(redirect_url=live_checkout(backend, user, body))
     found = backend.store.product(body.product_id)
     if found is None:
         raise HTTPException(404, NOT_FOUND_PRODUCT)
@@ -462,6 +524,30 @@ def checkout(body: CheckoutRequest, user: User = Depends(current_user), backend:
         if found.sizes[size] <= 0:
             raise bad_request("That size is out of stock.")
     return CheckoutResponse(redirect_url=delivery.buy_link(found.id, size))
+
+
+def live_checkout(backend: Backend, user: User, body: CheckoutRequest) -> str:
+    """The store's own checkout (or product page) link, fresh from Shopify; we never handle payment."""
+    if body.session_id:
+        pincode = own_session(backend, user, body.session_id).brief.pincode
+    else:
+        pincode = backend.store.user(user.uid).pincode
+    size = " ".join((body.size or "").split()) or None
+    try:
+        return live_of(backend).catalog.checkout_link(body.product_id, pincode, size)
+    except shopify.SizeUnavailable as error:
+        raise bad_request("That size isn't available at the store right now.") from error
+    except shopify.CatalogError as error:
+        raise store_problem(error) from error
+    except ValueError as error:
+        raise HTTPException(404, NO_LONGER_AVAILABLE) from error
+
+
+def store_problem(error: shopify.CatalogError) -> HTTPException:
+    if error.status in (400, 404, 422):
+        return HTTPException(404, NOT_FOUND_PRODUCT)
+    log.warning("live store data not loaded: %s", error)
+    return HTTPException(503, STORE_BUSY)
 
 
 # ---------- The app ----------

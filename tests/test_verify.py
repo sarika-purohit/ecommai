@@ -745,3 +745,85 @@ def test_briefs_file_accepts_plain_wrapped_and_expected_lines(tmp_path):
     path = tmp_path / "briefs.jsonl"
     path.write_text("\n".join(json.dumps(row) for row in (brief, {"brief": brief}, {"text": "x", "expected": brief})))
     assert [b.category for b in verify.read_briefs(path)] == ["Kurtas"] * 3
+
+
+# ---------- Live store products ----------
+
+LIVE_ID = "gid://shopify/p/3V4Xryr32ubFelobSCmrGa"
+COTTON = MustHave(id="m5", attribute="fabric", rule="is", value="cotton")
+
+
+def live_product(**fields) -> Product:
+    photo = "https://cdn.shopify.com/s/files/1/0843/4650/3471/files/13.webp"
+    data = {
+        "id": LIVE_ID, "title": "Olive Moss Cotton A-Line Kurti with Pockets", "gender": "women",
+        "masterCategory": "Apparel", "subCategory": "Topwear", "articleType": "Kurtas", "group": "tops",
+        "description": "Crafted from breathable cotton fabric with functional side pockets and a soft lining.",
+        "catalogue_details": {"Specs": "Material: 100% Cotton; Sleeve Length: 3/4"},
+        "images": Images(original=photo, gemini=photo + "?width=1000", thumb=photo + "?width=300"),
+        "demo_data": False, "source": "shopify", "store": "LiliumByShrivha",
+    }
+    return Product.model_validate(data | fields)
+
+
+def test_a_live_listing_keeps_the_stores_text_apart_from_shopifys_ai_metadata():
+    product = live_product()
+    listing = verify.listing_for(product)
+    assert listing.seller_texts == [
+        "Title: Olive Moss Cotton A-Line Kurti with Pockets", "Store: LiliumByShrivha",
+        f"Store description (the store's listing; Shopify may have enriched it): {product.description}",
+    ]
+    assert listing.ai_texts == ["Material: 100% Cotton; Sleeve Length: 3/4"]
+    assert listing.reviews == []
+    prompt = verify.product_prompt(product, listing, [POCKETS, COTTON])
+    assert "Specs (inferred by Shopify's AI): Material: 100% Cotton" in prompt
+    assert "(no reviews)" in prompt and "Gender:" not in prompt
+
+
+def test_a_fabric_pass_from_shopifys_ai_metadata_is_unclear_but_from_the_stores_listing_it_stands():
+    product = live_product()
+    inferred = judge(answer("m5", "pass", "details", quote="Material: 100% Cotton"), COTTON, product).check
+    assert inferred.status == "unclear"
+    assert "Shopify's AI summary can't show this" in inferred.evidence.note
+    for quote in ("Olive Moss Cotton A-Line Kurti", "Crafted from breathable cotton fabric"):
+        assert judge(answer("m5", "pass", "details", quote=quote), COTTON, product).check.status == "pass"
+    pockets = judge(answer("m1", "pass", "details", quote="functional side pockets"), POCKETS, product).check
+    assert pockets.status == "pass"
+
+
+def test_live_shop_details_are_unclear_with_a_pointer_to_the_store():
+    check = verify.shop_check(COD, live_product())
+    assert check.status == "unclear" and check.evidence.note == "Live stores show cash on delivery at their own checkout."
+    assert verify.shop_check(COD, make_product(cod=None)).evidence is None
+
+
+def test_live_checks_are_saved_under_a_safe_id_and_expire():
+    doc_id = verify.doc_id(LIVE_ID, POCKETS)
+    assert doc_id.startswith("shopify_") and doc_id.endswith("__pockets__present__true") and "/" not in doc_id
+    assert verify.doc_id(LIVE_ID, POCKETS) == doc_id != verify.doc_id(LIVE_ID + "x", POCKETS)
+    assert verify.doc_id("15970", POCKETS) == "15970__pockets__present__true"
+
+    cache = verify.MemoryCache()
+    verify.careful_check(ShoppingBrief(category="Kurtas", must_haves=[POCKETS]), [live_product()],
+                         client=FakeClient(all_pass), cache=cache, settings=FAST)
+    saved = cache.docs[doc_id]
+    assert saved["expires_at"] - saved["created_at"] == verify.LIVE_CHECK_TTL
+    assert saved["version"] == verify.LIVE_VERSION != verify.VERSION
+    assert verify.check_from_doc(saved, POCKETS).status == "pass"
+    assert verify.check_from_doc(saved | {"expires_at": saved["created_at"]}, POCKETS) is None
+    assert verify.check_from_doc(saved | {"version": verify.VERSION}, POCKETS) is None
+    assert "expires_at" not in verify.cache_doc("15970", verify.Decided(POCKETS, verify.check_from_doc(saved, POCKETS)), "m")
+
+
+def test_a_live_photo_is_read_from_its_link_and_never_downloaded():
+    fetched = []
+
+    def respond(contents):
+        return errors.ClientError(400, {"error": {"code": 400, "message": "can't fetch", "status": "INVALID_ARGUMENT"}})
+
+    product = live_product()
+    with pytest.raises(verify.CheckFailed):
+        verify.check_product(FakeClient(respond), product, [POCKETS], FAST, sleep=lambda s: None, fetch=fetched.append)
+    assert fetched == []
+    part = verify.photo_part(product)
+    assert part.file_data.file_uri == "https://cdn.shopify.com/s/files/1/0843/4650/3471/files/13.webp?width=1000"

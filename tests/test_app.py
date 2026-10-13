@@ -1,5 +1,6 @@
 import base64
 import json
+from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,21 +15,25 @@ from tests.fixtures.app.fakes import (
     IMAGE_VECTOR,
     Checker,
     FakeDB,
+    ShopifyServer,
     backend,
     brief_answer,
+    live,
     product_doc,
     sneakers,
+    web_findings,
 )
 
 ENV = {"AUTH_MODE": "dev", "ALLOWED_ORIGINS": "http://localhost:3000"}
-REQUEST = {"text": "white sneakers with no logo, size 9, under 3000", "pincode": BENGALURU, "language": "en"}
+REQUEST = {"text": "white sneakers with no logo, size 9, under 3000", "pincode": BENGALURU, "language": "en",
+           "source": "catalog"}
 NEVER_SUEDE = {"attribute": "upper_material", "rule": "is_not", "value": "suede"}
 PHOTO = base64.b64encode(b"\xff\xd8\xff\xe0 a tiny jpeg").decode()
 
 RESULT_FIELDS = {"product_id", "title", "total_price", "delivery_date", "ticks", "reason", "score"}
 CARD_FIELDS = RESULT_FIELDS | {
     "brand", "thumb", "photo", "original", "price", "delivery_fee", "cod", "returns", "rating_avg", "rating_count",
-    "demo_data", "sizes_in_stock",
+    "demo_data", "sizes_in_stock", "source", "store", "product_url", "shipping_note",
 }
 DONE_FIELDS = {"checked", "passed", "unclear", "rejected", "duplicates", "tradeoffs", "matches", "almost",
                "not_checkable"}
@@ -437,3 +442,127 @@ def test_saved_checks_are_reused_between_searches():
     search(client, session_id)
     assert checker.calls == 2
     assert isinstance(wired.services.check_cache, verify.MemoryCache) and len(wired.services.check_cache.docs) == 6
+
+
+# ---------- Live store search ----------
+
+G230 = "gid://shopify/p/DmptlUPpvXkzRbz0yzmrv?shop=67284107316"
+JANASYA = "gid://shopify/p/6YCYATAVKvMyCEP24NCeIF?shop=60712091818"
+KURTA_ANSWER = brief_answer("Kurtas", gender="women", must=[("pockets=none", "is_not")], budget=1500, size="")
+LIVE_REQUEST = {"text": "Office ke liye ladies cotton kurta chahiye, pockets zaroor, 1500 tak", "pincode": "411038",
+                "language": "hinglish"}
+
+
+def live_client(server: ShopifyServer | None = None, find=None, checker: Checker | None = None):
+    server = server or ShopifyServer()
+    client, wired = make_client(FakeDB(sneakers(2)), checker=checker, brief=lambda contents: KURTA_ANSWER,
+                                live_services=live(server, find or (lambda brief, text: web_findings())))
+    return client, wired, server
+
+
+def live_session(client: TestClient) -> str:
+    response = client.post("/api/brief", json=LIVE_REQUEST)
+    assert response.status_code == 200, response.text
+    return response.json()["session_id"]
+
+
+def test_a_brief_is_live_unless_the_catalog_is_asked_for():
+    client, wired, _ = live_client()
+    session_id = live_session(client)
+    assert wired.store.db.docs("sessions")[session_id]["source"] == "live"
+    catalog = start(client, source="catalog")["session_id"]
+    assert wired.store.db.docs("sessions")[catalog]["source"] == "catalog"
+    assert client.post("/api/brief", json=LIVE_REQUEST | {"source": "web"}).status_code == 400
+
+
+def test_a_live_search_streams_the_web_event_before_done_and_keeps_no_shopify_data():
+    client, wired, server = live_client()
+    session_id = live_session(client)
+    found = search(client, session_id)
+    names = [name for name, _ in found]
+    assert names == ["candidates"] + ["checking"] * 3 + ["verified"] * 3 + ["web", "done"]
+    assert set(found[-2][1]) == {"results", "search_entry_point_html", "queries"}
+    assert set(found[-2][1]["results"][0]) == {"title", "url", "site", "price_text", "snippet"}
+    done = found[-1][1]
+    assert set(done) == DONE_FIELDS and done["passed"] == 3
+    card = next(card for card in done["matches"] if card["product_id"] == G230)
+    assert set(card) == CARD_FIELDS
+    assert card["source"] == "shopify" and card["store"] == "Swapna Weddings" and card["demo_data"] is False
+    assert card["price"]["demo"] is False and card["delivery_date"] is None and card["cod"] is None
+    assert card["shipping_note"] == "Shipping and delivery shown at the store's checkout"
+    assert server.calls("search_catalog")[0]["catalog"]["query"] == "women's kurta with pockets"
+
+    saved = wired.store.db.docs("sessions")[session_id]
+    assert set(saved["live_ids"]) == {card["product_id"] for card in done["matches"]}
+    assert "Swapna" not in json.dumps(saved["results"]) and "cdn.shopify.com" not in json.dumps(saved["results"])
+    assert saved["results"]["passed"] == 3 and saved["timings"]["shopify_search_ms"] >= 0
+
+
+def test_set_source_switches_where_the_next_search_looks():
+    client, wired, server = live_client()
+    session_id = live_session(client)
+    brief = update(client, session_id, {"type": "set_source", "source": "catalog"}).json()["brief"]
+    assert brief["category"] == "Kurtas"
+    assert wired.store.db.docs("sessions")[session_id]["source"] == "catalog"
+    assert search(client, session_id)[-1][0] == "done" and server.bodies == []
+    assert update(client, session_id, {"type": "set_source", "source": "elsewhere"}).status_code == 400
+
+
+def test_a_live_product_page_is_fetched_fresh_with_its_ticks_for_the_session():
+    client, _, server = live_client(checker=Checker({"G230_Black1.jpg": {"m1": "fail"}}))
+    session_id = live_session(client)
+    path = f"/api/products/{quote(G230, safe='')}?session_id={session_id}"
+    before = client.get(path).json()
+    assert before["id"] == G230 and before["source"] == "shopify" and before["store"] == "Swapna Weddings"
+    assert before["sizes_in_stock"] == ["M", "L", "XL", "2XL"]
+    assert before["checkout_url"].startswith("https://www.swapnawedding.com/cart/")
+    assert before["shipping_note"] == "Shipping and delivery shown at the store's checkout"
+    assert [tick["status"] for tick in before["ticks"]] == ["unclear"]
+
+    search(client, session_id)
+    after = client.get(path).json()
+    assert [tick["status"] for tick in after["ticks"]] == ["fail"]
+    assert len(server.calls("get_product")) >= 2
+
+    assert client.get(f"/api/products/{quote(G230, safe='')}").status_code == 400
+    assert client.get(f"/api/products/{quote('gid://shopify/p/Gone', safe='')}?session_id={session_id}").status_code == 404
+
+
+def test_a_live_product_page_says_when_the_store_cant_be_reached():
+    client, _, server = live_client()
+    session_id = live_session(client)
+    server.fail = [503, 503, 503]
+    response = client.get(f"/api/products/{quote(G230, safe='')}?session_id={session_id}")
+    assert response.status_code == 503 and "store" in response.json()["detail"]
+
+
+def test_checkout_for_a_live_product_redirects_to_the_stores_own_checkout():
+    client, _, _ = live_client()
+    session_id = live_session(client)
+    response = client.post("/api/checkout", json={"product_id": G230, "size": "M", "session_id": session_id})
+    assert response.json() == {"redirect_url": "https://www.swapnawedding.com/cart/46385104748002:1"
+                                               "?_gsid=M1VPnRbrLHUB&utm_source=shopify&utm_medium=catalog"}
+    page = client.post("/api/checkout", json={"product_id": G230}).json()["redirect_url"]
+    assert page.startswith("https://www.swapnawedding.com/products/womens-kurti-g230")
+    refused = client.post("/api/checkout", json={"product_id": G230, "size": "XS"})
+    assert refused.status_code == 400 and "isn't available" in refused.json()["detail"]
+    assert client.post("/api/checkout", json={"product_id": "gid://shopify/p/Gone", "size": "M"}).status_code == 404
+
+
+def test_feedback_on_a_live_product_is_remembered_without_changing_the_style():
+    client, wired, _ = live_client()
+    session_id = live_session(client)
+    response = client.post("/api/feedback", json={"session_id": session_id, "product_id": JANASYA, "action": "save"})
+    assert response.json() == {"ok": True}
+    user = wired.store.db.docs("users")[DEMO_USER_ID]
+    assert user["likes"] == [JANASYA] and "taste" not in user
+
+
+def test_our_ucp_agent_profile_is_public():
+    client = TestClient(create_app(backend(FakeDB()), env={}))
+    assert client.post("/api/brief", json=REQUEST).status_code == 401
+    response = client.get("/.well-known/ucp")
+    assert response.status_code == 200 and response.headers["cache-control"] == "public, max-age=3600"
+    profile = response.json()["ucp"]
+    assert profile["version"] == "2026-08-25"
+    assert "dev.shopify.catalog.global" in profile["capabilities"]

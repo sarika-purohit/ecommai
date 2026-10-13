@@ -10,6 +10,12 @@ just one must-have (see `one_away`). `search` reports progress through `emit`, i
     verified {product_id, status, ticks}  as each careful check finishes (saved results come first)
     done {...}                            the ranked results
 
+`live_search` runs the same steps on live Shopify products (agent/sources/shopify.py) instead of our catalogue:
+find in Shopify's Global Catalog -> live_quick_check (budget limit, size) -> careful check of the photo and listing
+-> rank -> what to give up. Alongside it, Gemini with Google Search looks for listings on other sites
+(agent/web_search.py); its `web {results, search_entry_point_html, queries}` event comes just before `done`, or not
+at all when it fails or isn't ready WEB_WAIT_S after the checks.
+
 One product's bad data never fails a search: it's logged and left out.
 
 This module also turns a photo into words the checklist step understands, and applies the shopper's edits to a
@@ -23,10 +29,12 @@ import socket
 import time
 from collections import Counter
 from collections.abc import Callable, Sequence, Set
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import cache
-from typing import Annotated, Any, ClassVar, Literal
+from typing import Annotated, Any, ClassVar, Literal, Protocol
 from urllib.parse import urlsplit
 
 import httpx
@@ -34,15 +42,17 @@ from google.genai import errors, types
 from pydantic import BaseModel, Field, ValidationError, create_model
 
 from agent import brief as briefs
-from agent import delivery, verify
+from agent import delivery, verify, web_search
 from agent.cards import ResultCard, result_card
 from agent.learn import TasteProfile, vectors
 from agent.models import Check, Evidence, MustHave, Product, Rule, ShoppingBrief, Status, Verification
-from agent.quick_check import clearly_breaks, quick_check, saved_value
+from agent.quick_check import clearly_breaks, live_quick_check, quick_check, saved_value
 from agent.rank import Candidate, Tick, rank, ticks_for
 from agent.retrieve import DEFAULT_LIMIT, FETCH_LIMIT, Hit, attach_embeddings, find_candidates
-from agent.rules import apply_rules
+from agent.rules import apply_rules, label
+from agent.sources import shopify
 from agent.tradeoffs import Tradeoff, suggest_tradeoffs
+from agent.web_search import WebFindings, WebResult
 from data_prep import schemas
 from data_prep.embed import Embedder, Embedding
 from data_prep.simulate import size_names
@@ -62,6 +72,13 @@ PHOTO_ATTEMPTS = 3
 RETRY_CODES = {408, 429, 500, 502, 503, 504}
 MAX_BUDGET_INR = 10_00_000
 MAX_TEXT = briefs.MAX_REQUEST_CHARS
+LIVE_FETCH_LIMIT = shopify.SEARCH_LIMIT
+WEB_WAIT_S = 3.0
+SIZES_WAIT_S = 1.5
+SIZE_LOOKUPS = 6
+LOOKUP_WORKERS = 3
+LIVE_DEADLINE_NOTE = "Delivery dates for live stores are shown at their checkout"
+LIVE_SHOP_NOTE = "{}: check at the store's checkout"
 
 
 # ---------- Stream events ----------
@@ -104,6 +121,13 @@ class DoneEvent(Event):
     not_checkable: list[str]
 
 
+class WebEvent(Event):
+    kind: ClassVar[str] = "web"
+    results: list[WebResult]
+    search_entry_point_html: str | None = None
+    queries: list[str] = Field(default_factory=list)
+
+
 class ErrorEvent(Event):
     kind: ClassVar[str] = "error"
     message: str
@@ -139,6 +163,30 @@ def default_services() -> Services:
     db = default_db()
     return Services(db=db, embedder=default_embedder(), check_cache=verify.FirestoreCache(client=db),
                     check_client=verify.make_client())
+
+
+class LiveCatalog(Protocol):
+    def search(self, brief: ShoppingBrief, query_text: str, limit: int = ...) -> list[Product]: ...
+
+    def get_product(self, product_id: str, brief: ShoppingBrief) -> Product: ...
+
+    def checkout_link(self, product_id: str, pincode: str | None, size: str | None) -> str: ...
+
+
+WebFinder = Callable[[ShoppingBrief, str], WebFindings | None]
+
+
+@dataclass
+class LiveServices:
+    catalog: LiveCatalog
+    find_on_web: WebFinder | None = None
+
+
+def default_live(services: Services) -> LiveServices:
+    def find(brief: ShoppingBrief, text: str) -> WebFindings | None:
+        return web_search.find_on_web(brief, text, client=services.check_client)
+
+    return LiveServices(catalog=shopify.Catalog(), find_on_web=find)
 
 
 class PhotoProblem(ValueError):
@@ -183,6 +231,7 @@ class SearchOutcome:
     done: DoneEvent
     timings: dict[str, float] = field(default_factory=dict)
     photo_vector: list[float] | None = None
+    live_ids: list[str] = field(default_factory=list)
 
 
 # ---------- The search ----------
@@ -332,6 +381,171 @@ def search(
     return SearchOutcome(done=done, timings=timings, photo_vector=photo.vector if photo else None)
 
 
+def live_search(
+    brief: ShoppingBrief,
+    *,
+    query_text: str,
+    services: Services,
+    live: LiveServices,
+    taste: TasteProfile | None = None,
+    emit: Emit = lambda event: None,
+    deadline_s: float = CHECK_DEADLINE_S,
+    web_wait_s: float = WEB_WAIT_S,
+) -> SearchOutcome:
+    """Steps 2 to 4 on live Shopify products, with listings on other sites alongside.
+
+    Raises only when the whole search fails, e.g. shopify.CatalogError when Shopify's catalog can't be reached.
+    """
+    started = time.perf_counter()
+    timings: dict[str, float] = {}
+    brief, shop_notes = without_shop_details(brief)
+    workers = ThreadPoolExecutor(max_workers=1 + LOOKUP_WORKERS, thread_name_prefix="live")
+    try:
+        web = workers.submit(_timed, live.find_on_web, brief, query_text) if live.find_on_web else None
+        clock = time.perf_counter()
+        products = live.catalog.search(brief, query_text, LIVE_FETCH_LIMIT)
+        timings["shopify_search_ms"] = _ms_since(clock)
+
+        clock = time.perf_counter()
+        kept, dropped = live_quick_check(brief, products)
+        pool = kept[:CHECK_POOL]
+        chosen = choose_for_check(pool)
+        timings["quick_ms"] = _ms_since(clock)
+        emit(CandidatesEvent(count=len(pool), dropped=len(dropped)))
+        for hit in chosen:
+            images = hit.product.images
+            emit(CheckingEvent(product_id=hit.product.id, title=hit.product.title, thumb=images.thumb if images else None))
+
+        def on_result(verification: Verification) -> None:
+            timings.setdefault("first_verified_ms", _ms_since(started))
+            try:
+                ticks = ticks_for(brief, verification)
+                emit(VerifiedEvent(product_id=verification.product_id, status=tick_status(ticks), ticks=ticks))
+            except Exception:
+                log.exception("product %s: couldn't report its check", verification.product_id)
+
+        clock = time.perf_counter()
+        verifications = verify.careful_check(
+            brief,
+            [hit.product for hit in chosen],
+            client=services.check_client,
+            cache=services.check_cache,
+            settings=services.check_settings,
+            on_result=on_result,
+            deadline_s=deadline_s,
+        )
+        timings["check_ms"] = _ms_since(clock)
+
+        clock = time.perf_counter()
+        candidates = _candidates(chosen, verifications)
+        results = rank(brief, candidates, vectors(taste or {}))
+        tradeoffs = suggest_tradeoffs(brief, candidates)
+        timings["rank_ms"] = _ms_since(clock)
+
+        clock = time.perf_counter()
+        shown = [result.product_id for result in [*results.matches, *results.almost]][:SIZE_LOOKUPS]
+        lookups = {product_id: workers.submit(live.catalog.get_product, product_id, brief) for product_id in shown}
+        web_event = _web_event(web, web_wait_s, timings) if web is not None else None
+        found = _with_live_sizes({candidate.product.id: candidate.product for candidate in candidates}, lookups,
+                                 deadline=clock + SIZES_WAIT_S)
+        timings["sizes_ms"] = _ms_since(clock)
+        matches = _cards(results.matches, found)
+        almost = _cards(results.almost, found)
+        rejected = Counter(reason for _, reason in dropped) + Counter(results.rejected)
+        done = DoneEvent(
+            checked=results.checked + len(dropped),
+            passed=len(matches),
+            unclear=len(almost),
+            rejected=dict(rejected.most_common()),
+            duplicates=results.duplicates,
+            tradeoffs=tradeoffs,
+            matches=matches,
+            almost=almost,
+            not_checkable=[*live_not_checkable(brief), *shop_notes],
+        )
+        if web_event is not None:
+            emit(web_event)
+        timings["total_ms"] = _ms_since(started)
+        log.info(
+            "live search %s: %d found, %d kept, %d dropped, %d checked, %d passed, %d unclear, ms %s",
+            brief.category, len(products), len(pool), len(dropped), done.checked, done.passed, done.unclear, timings,
+        )
+        emit(done)
+        return SearchOutcome(done=done, timings=timings, live_ids=[card.product_id for card in [*matches, *almost]])
+    finally:
+        workers.shutdown(wait=False, cancel_futures=True)
+
+
+def without_shop_details(brief: ShoppingBrief) -> tuple[ShoppingBrief, list[str]]:
+    """Live stores don't share cash on delivery, returns or exchange, so those can't decide a match.
+
+    They leave the checklist for this search and come back as notes to check at the store's checkout.
+    """
+    shop = [m for m in brief.must_haves if m.attribute in verify.SHOP_DETAILS]
+    if not shop:
+        return brief, []
+    kept = [m for m in brief.must_haves if m.attribute not in verify.SHOP_DETAILS]
+    notes = [LIVE_SHOP_NOTE.format(label(m)[:1].upper() + label(m)[1:]) for m in shop]
+    return brief.model_copy(update={"must_haves": kept}), notes
+
+
+def live_not_checkable(brief: ShoppingBrief) -> list[str]:
+    return [*brief.not_checkable, *([LIVE_DEADLINE_NOTE] if brief.deadline_date else [])]
+
+
+def live_summary(done: DoneEvent) -> dict:
+    """What a live search keeps in the session: our counts and verdicts by Shopify id, none of Shopify's data."""
+    summary = done.model_dump(mode="json", exclude={"matches", "almost"})
+    for name, cards in (("matches", done.matches), ("almost", done.almost)):
+        summary[name] = [
+            {"product_id": card.product_id, "statuses": {tick.must_have_id: tick.status for tick in card.ticks}}
+            for card in cards
+        ]
+    return summary
+
+
+def _timed(find: WebFinder, brief: ShoppingBrief, text: str) -> tuple[WebFindings | None, float]:
+    clock = time.perf_counter()
+    return find(brief, text), _ms_since(clock)
+
+
+def _web_event(future: Future, wait_s: float, timings: dict[str, float]) -> WebEvent | None:
+    """The `web` event if the web search is done within wait_s; the main results never wait longer."""
+    clock = time.perf_counter()
+    try:
+        findings, took_ms = future.result(timeout=wait_s)
+    except FutureTimeout:
+        timings["web_wait_ms"] = _ms_since(clock)
+        log.warning("web search not ready %.1f s after the checks; left out", wait_s)
+        return None
+    except Exception:
+        log.exception("web search failed")
+        return None
+    timings["web_ms"] = took_ms
+    timings["web_wait_ms"] = _ms_since(clock)
+    if findings is None:
+        return None
+    return WebEvent(results=findings.results, search_entry_point_html=findings.search_entry_point_html,
+                    queries=findings.queries)
+
+
+def _with_live_sizes(products: dict[str, Product], lookups: dict[str, Future], *, deadline: float) -> dict[str, Product]:
+    """The store's available sizes from get_product when it answered by `deadline`; the search's sizes otherwise.
+
+    Only the products shown are looked up, a few at a time: Shopify's keyless access is rate limited.
+    """
+    updated = dict(products)
+    for product_id, future in lookups.items():
+        try:
+            fresh = future.result(timeout=max(0.0, deadline - time.perf_counter()))
+        except Exception as error:
+            log.info("product %s: sizes from the search only: %s", product_id, type(error).__name__)
+            continue
+        if fresh.sizes and product_id in updated:
+            updated[product_id] = updated[product_id].model_copy(update={"sizes": fresh.sizes})
+    return updated
+
+
 def _no_photo(url: str) -> tuple[bytes, str]:
     raise PhotoProblem("no photo for this search")
 
@@ -385,6 +599,9 @@ def friendly_error(error: Exception) -> ErrorEvent:
         return ErrorEvent(message="Our AI is busy right now. Please try again in a moment.", retryable=True)
     if isinstance(error, PhotoProblem):
         return ErrorEvent(message=str(error), retryable=False)
+    if isinstance(error, shopify.CatalogError):
+        return ErrorEvent(message="We couldn't reach the live stores right now. Please try again, or search our "
+                                  "demo catalogue.", retryable=True)
     if isinstance(error, ValueError) and "unknown category" in str(error):
         return ErrorEvent(message="We don't carry that kind of product yet.", retryable=False)
     return ErrorEvent(message="Something went wrong while searching. Please try again.", retryable=True)
@@ -618,9 +835,17 @@ class SetSize(BaseModel):
     size: str | None = Field(default=None, max_length=20)
 
 
+Source = Literal["live", "catalog"]
+
+
+class SetSource(BaseModel):
+    type: Literal["set_source"]
+    source: Source
+
+
 BriefChange = Annotated[
     TextChange | AnswerChange | AddMustHave | EditMustHave | RemoveMustHave | SetRule | RemoveNiceToHave | SetBudget
-    | SetDeadline | SetPincode | SetSize,
+    | SetDeadline | SetPincode | SetSize | SetSource,
     Field(discriminator="type"),
 ]
 GEMINI_CHANGES = (TextChange, AnswerChange, AddMustHave)
@@ -632,6 +857,7 @@ class Edited:
     rules: list[MustHave]
     disabled: set[str]
     words: str = ""
+    source: Source | None = None
 
 
 def apply_change(
@@ -643,10 +869,14 @@ def apply_change(
     today: date,
     client: Any = None,
 ) -> Edited:
-    """The checklist after one edit, with the saved rules re-applied. Free-text edits go to Gemini (BriefError)."""
+    """The checklist after one edit, with the saved rules re-applied. Free-text edits go to Gemini (BriefError).
+
+    set_source leaves the checklist as it is; Edited.source carries where the next search looks.
+    """
     rules = list(rules)
     disabled = set(disabled)
     words = ""
+    source = None
 
     def ask(said: str) -> ShoppingBrief:
         return with_fallback(lambda settings: briefs.update_brief(brief, said, today=today, client=client,
@@ -682,10 +912,12 @@ def apply_change(
             brief = _resolved(brief.model_copy(update={"pincode": code}), "pincode")
         case SetSize(size=size):
             brief = _set_size(brief, size)
+        case SetSource(source=chosen):
+            source = chosen
         case _:
             raise ChangeProblem("We don't know that kind of change.")
     brief = apply_rules(brief, rules, disabled)
-    return Edited(brief=brief, rules=rules, disabled=disabled, words=words)
+    return Edited(brief=brief, rules=rules, disabled=disabled, words=words, source=source)
 
 
 def _group(brief: ShoppingBrief) -> str:

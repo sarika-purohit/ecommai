@@ -7,6 +7,10 @@ export type EvidenceType = "image" | "details" | "reviews" | "attribute";
 export type Gender = "men" | "women" | "boys" | "girls" | "unisex";
 export type ProductGroup = "tops" | "bottoms" | "shoes" | "watches" | "bags" | "sunglasses";
 export type DetailValue = string | boolean | number;
+/** Where a search looks: live Shopify stores through UCP, or our demo catalogue. */
+export type SearchSource = "live" | "catalog";
+/** Where a product came from: our demo catalogue, or a live store found through UCP. */
+export type ProductSource = "catalog" | "shopify";
 
 export interface MustHave {
   id: string;
@@ -85,8 +89,17 @@ export interface RankedResult {
   score: number;
 }
 
-/** agent/cards.py `ResultCard`: a ranked result plus what the card shows. */
+/**
+ * agent/cards.py `ResultCard`: a ranked result plus what the card shows. Live cards have no demo price,
+ * delivery date, COD, returns or reviews, and their total is the item price because shipping is unknown.
+ */
 export interface ResultCard extends RankedResult {
+  source: ProductSource;
+  /** The live store's name. */
+  store: string | null;
+  /** The product's page on the live store. */
+  product_url: string | null;
+  shipping_note: string | null;
   brand: string | null;
   thumb: string | null;
   /** The gemini/ photo (about 1,000 px), the one the careful check looked at. */
@@ -179,6 +192,11 @@ export interface Product {
   rating_count: number;
   images: Images | null;
   demo_data: boolean;
+  source: ProductSource;
+  /** Only on live products: the store's name and its own pages. */
+  store: string | null;
+  product_url: string | null;
+  checkout_url: string | null;
 }
 
 /**
@@ -191,6 +209,8 @@ export interface ProductDetails extends Product {
   ticks?: Tick[];
   delivery_date?: string | null;
   total_price?: number | null;
+  /** Live products only, as on their result card. */
+  shipping_note?: string | null;
 }
 
 // ---------- Requests and responses ----------
@@ -201,6 +221,7 @@ export interface BriefInput {
   image?: Blob | string;
   pincode: string;
   language: string;
+  source: SearchSource;
 }
 
 export interface BriefRequestBody {
@@ -210,6 +231,7 @@ export interface BriefRequestBody {
   image_mime_type?: string;
   pincode: string;
   language: string;
+  source: SearchSource;
 }
 
 export interface BriefResponse {
@@ -230,7 +252,8 @@ export type BriefChange =
   | { type: "set_budget"; budget_max_inr: number | null }
   | { type: "set_deadline"; deadline_date: string | null }
   | { type: "set_pincode"; pincode: string }
-  | { type: "set_size"; size: string | null };
+  | { type: "set_size"; size: string | null }
+  | { type: "set_source"; source: SearchSource };
 
 export interface BriefUpdateRequest {
   session_id: string;
@@ -279,18 +302,37 @@ export interface DoneEvent {
   not_checkable: string[];
 }
 
+/** A page on another site that Grounding with Google Search found. We haven't checked it. */
+export interface WebResult {
+  title: string;
+  url: string;
+  site: string;
+  price_text: string | null;
+  snippet: string | null;
+}
+
+/** The "On other sites" list, sent before `done` when grounding found anything. */
+export interface WebEvent {
+  type: "web";
+  results: WebResult[];
+  /** Google's Search Suggestions (renderedContent). Must be shown exactly as given, next to the results. */
+  search_entry_point_html: string | null;
+  queries: string[];
+}
+
 export interface ErrorEvent {
   type: "error";
   message: string;
   retryable: boolean;
 }
 
-export type SearchEvent = CandidatesEvent | CheckingEvent | VerifiedEvent | DoneEvent | ErrorEvent;
+export type SearchEvent = CandidatesEvent | CheckingEvent | VerifiedEvent | WebEvent | DoneEvent | ErrorEvent;
 
 export const SEARCH_EVENT_TYPES: ReadonlySet<SearchEvent["type"]> = new Set([
   "candidates",
   "checking",
   "verified",
+  "web",
   "done",
   "error",
 ]);
@@ -333,6 +375,9 @@ export interface CheckoutRequest {
 }
 
 export interface CheckoutResponse {
-  /** The store's checkout page for this product and size; our demo store is /checkout?product=&size=. */
+  /**
+   * The store's checkout page for this product and size. Catalogue products go to our demo store,
+   * /checkout?product=&size=; live products go to the store's own site.
+   */
   redirect_url: string;
 }

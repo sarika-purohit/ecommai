@@ -1,3 +1,4 @@
+import time
 from datetime import date
 
 import pytest
@@ -9,6 +10,7 @@ from agent import workflow
 from agent.models import MustHave, NiceToHave, Product, ShoppingBrief
 from agent.retrieve import Hit
 from agent.sessions import Store
+from agent.sources import shopify
 from agent.workflow import (
     AddMustHave,
     ChangeProblem,
@@ -23,6 +25,7 @@ from agent.workflow import (
     SetPincode,
     SetRule,
     SetSize,
+    SetSource,
     TextChange,
 )
 from tests.fixtures.app.fakes import (
@@ -32,11 +35,14 @@ from tests.fixtures.app.fakes import (
     Checker,
     FakeClient,
     FakeDB,
+    ShopifyServer,
     brief_answer,
+    live,
     near_text,
     product_doc,
     services,
     sneakers,
+    web_findings,
 )
 
 TUESDAY = date(2026, 10, 13)
@@ -430,6 +436,119 @@ def test_saved_rules_are_standardised_numbered_and_locked():
         workflow.saved_rules([MustHave(id="", attribute="fabric", rule="is", value="kevlar")])
 
 
+# ---------- Live store search ----------
+
+G230 = "gid://shopify/p/DmptlUPpvXkzRbz0yzmrv?shop=67284107316"
+LILIUM = "gid://shopify/p/3V4Xryr32ubFelobSCmrGa?shop=84346503471"
+JANASYA = "gid://shopify/p/6YCYATAVKvMyCEP24NCeIF?shop=60712091818"
+G230_PHOTO = "G230_Black1.jpg"
+LILIUM_PHOTO = "13_3a80946e-a95f-41a5-b49f-b48729c360ec.webp"
+JANASYA_PHOTO = "JAC25KR01985.jpg"
+POCKETS = MustHave(id="m1", attribute="pockets", rule="present", value=True)
+THREE_QUARTER = MustHave(id="m2", attribute="sleeve_length", rule="is", value="three-quarter")
+
+
+def kurta_brief(**fields) -> ShoppingBrief:
+    base = {"category": "Kurtas", "gender": "women", "must_haves": [POCKETS, THREE_QUARTER], "budget_max_inr": 1500,
+            "pincode": "411038"}
+    return ShoppingBrief(**(base | fields))
+
+
+def run_live(brief=None, checker=None, server=None, find=None, svc=None, **kwargs):
+    seen: list[workflow.Event] = []
+    svc = svc or services(FakeDB(), checker)
+    outcome = workflow.live_search(
+        brief or kurta_brief(), query_text="cotton kurta with pockets", services=svc,
+        live=live(server, find), emit=seen.append, **kwargs,
+    )
+    return outcome, seen, svc
+
+
+def test_live_events_arrive_in_order_with_web_just_before_done_and_cards_per_the_contract():
+    checker = Checker({LILIUM_PHOTO: {"m1": "fail"}, JANASYA_PHOTO: {"m2": "unclear"}})
+    outcome, seen, svc = run_live(kurta_brief(deadline_date=date(2026, 10, 16)), checker,
+                                  find=lambda brief, text: web_findings())
+
+    assert kinds(seen) == ["candidates"] + ["checking"] * 3 + ["verified"] * 3 + ["web", "done"]
+    assert seen[0].model_dump() == {"count": 3, "dropped": 0}
+    assert {event.product_id for event in seen[1:4]} == {G230, LILIUM, JANASYA}
+    web = seen[-2].model_dump()
+    assert web == web_findings().model_dump()
+
+    done = outcome.done
+    assert (done.checked, done.passed, done.unclear, done.rejected) == (3, 1, 1, {"no pockets": 1})
+    assert done.not_checkable == ["Delivery dates for live stores are shown at their checkout"]
+    card = done.matches[0].model_dump(mode="json")
+    assert card["product_id"] == G230 and card["source"] == "shopify" and card["store"] == "Swapna Weddings"
+    assert card["product_url"].startswith("https://www.swapnawedding.com/products/womens-kurti-g230")
+    assert card["shipping_note"] == "Shipping and delivery shown at the store's checkout"
+    assert card["price"] == {"mrp": 999, "selling": 649, "demo": False} and card["total_price"] == 649
+    assert (card["delivery_date"], card["delivery_fee"], card["cod"], card["returns"]) == (None, 0, None, None)
+    assert (card["demo_data"], card["rating_avg"], card["rating_count"]) == (False, None, 0)
+    assert card["sizes_in_stock"] == ["M", "L", "XL", "2XL"]
+    assert card["thumb"].endswith("G230_Black1.jpg?width=300") and card["photo"].endswith("G230_Black1.jpg?width=1000")
+    assert card["original"].endswith("files/G230_Black1.jpg")
+    assert "₹649 + shipping" in card["reason"] and "delivered" not in card["reason"]
+    assert done.almost[0].product_id == JANASYA
+
+    assert outcome.live_ids == [G230, JANASYA]
+    assert {"shopify_search_ms", "check_ms", "web_ms", "total_ms"} <= set(outcome.timings)
+    saved = svc.check_cache.docs
+    assert saved and all(doc_id.startswith("shopify_") and "/" not in doc_id for doc_id in saved)
+    assert all(doc["expires_at"] > doc["created_at"] for doc in saved.values())
+
+
+def test_the_live_quick_check_drops_prices_beyond_the_soft_limit_and_sizes_not_in_stock():
+    outcome, seen, _ = run_live(kurta_brief(budget_max_inr=700))
+    assert seen[0].model_dump() == {"count": 2, "dropped": 1}
+    assert outcome.done.rejected["over budget"] == 2
+    outcome, seen, _ = run_live(kurta_brief(size="M"))
+    assert seen[0].model_dump() == {"count": 0, "dropped": 3}
+    assert outcome.done.rejected == {"size not in stock": 3} and outcome.done.matches == []
+
+
+def test_the_web_search_never_holds_up_the_results_and_its_failure_is_silent():
+    def slow(brief, text):
+        time.sleep(2)
+        return web_findings()
+
+    started = time.perf_counter()
+    _, seen, _ = run_live(find=slow, web_wait_s=0.1)
+    assert kinds(seen)[-1] == "done" and "web" not in kinds(seen)
+    assert time.perf_counter() - started < 1.5
+
+    _, seen, _ = run_live(find=lambda brief, text: None)
+    assert "web" not in kinds(seen) and kinds(seen)[-1] == "done"
+    _, seen, _ = run_live(find=None)
+    assert "web" not in kinds(seen)
+
+
+def test_saved_live_checks_are_reused_until_they_expire():
+    checker = Checker()
+    svc = services(FakeDB(), checker)
+    run_live(svc=svc)
+    assert checker.calls == 3
+    run_live(svc=svc)
+    assert checker.calls == 3
+    for doc in svc.check_cache.docs.values():
+        doc["expires_at"] = doc["created_at"]
+    run_live(svc=svc)
+    assert checker.calls == 6
+
+
+def test_when_the_store_catalog_is_down_the_shopper_gets_a_friendly_error():
+    with pytest.raises(shopify.CatalogError) as raised:
+        run_live(server=ShopifyServer(fail=[503, 503, 503]))
+    event = workflow.friendly_error(raised.value)
+    assert event.retryable and "live stores" in event.message
+
+
+def test_switching_the_source_keeps_the_checklist():
+    edited = edit(shoes_brief(), SetSource(type="set_source", source="catalog"))
+    assert edited.source == "catalog" and edited.brief == shoes_brief()
+    assert edit(shoes_brief(), SetBudget(type="set_budget", budget_max_inr=2000)).source is None
+
+
 # ---------- The ADK agent ----------
 
 
@@ -474,3 +593,22 @@ def test_the_adk_search_tool_takes_a_checklist_as_json(fake_deps):
     tool = FunctionTool(adk.search)
     args, problems = tool._preprocess_args_with_validation({"checklist": shoes_brief().model_dump(mode="json")})
     assert not problems and isinstance(args["checklist"], ShoppingBrief)
+
+
+def test_live_searches_turn_shop_details_into_checkout_notes():
+    from agent.models import MustHave, ShoppingBrief
+    from agent.workflow import without_shop_details
+
+    brief = ShoppingBrief(
+        category="Kurtas",
+        must_haves=[
+            MustHave(id="m1", attribute="fabric", rule="is", value="cotton"),
+            MustHave(id="r1", attribute="cod", rule="present", value=True, from_rule=True),
+            MustHave(id="m2", attribute="returnable", rule="is", value="yes"),
+        ],
+    )
+    live, notes = without_shop_details(brief)
+    assert [m.id for m in live.must_haves] == ["m1"]
+    assert notes == ["Cash on delivery: check at the store's checkout", "Returnable: check at the store's checkout"]
+    assert [m.id for m in brief.must_haves] == ["m1", "r1", "m2"]
+    assert without_shop_details(live) == (live, [])

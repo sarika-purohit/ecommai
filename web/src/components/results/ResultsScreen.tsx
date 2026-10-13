@@ -8,13 +8,13 @@ import { AppHeader } from "@/components/AppHeader";
 import { PhotoIcon } from "@/components/icons";
 import { NoSession, ScreenPlaceholder } from "@/components/NoSession";
 import { StatusIcon } from "@/components/proof/TickList";
-import { ResultsView } from "@/components/results/ResultsView";
+import { resultsSummary, ResultsView } from "@/components/results/ResultsView";
 import { ApiError, isAbort, searchProducts } from "@/lib/api";
 import { canRetry, errorMessage } from "@/lib/errors";
-import { clearSearch, resultsStore, sessionStore, type SearchSession } from "@/lib/session";
+import { clearSearch, resultsStore, sessionStore, sourceOf, type SearchSession } from "@/lib/session";
 import { useIsClient } from "@/lib/stored";
 import { strings } from "@/lib/strings";
-import type { DoneEvent, SearchEvent, Status } from "@/lib/types";
+import type { DoneEvent, SearchEvent, Status, WebEvent } from "@/lib/types";
 
 const text = strings.results;
 
@@ -73,10 +73,11 @@ export function ResultsScreen() {
   const current =
     session && results && results.sessionId === session.sessionId && results.searchRun === session.searchRun ? results : null;
 
-  function finish(done: DoneEvent, ranWith: SearchSession) {
-    resultsStore.set({ sessionId: ranWith.sessionId, searchRun: ranWith.searchRun, brief: ranWith.brief, done });
+  function finish(done: DoneEvent, web: WebEvent | null, ranWith: SearchSession) {
+    const source = sourceOf(ranWith);
+    resultsStore.set({ sessionId: ranWith.sessionId, searchRun: ranWith.searchRun, brief: ranWith.brief, source, done, web });
     setFinishedHere(true);
-    setAnnouncement(text.summary(done.checked, done.passed));
+    setAnnouncement(resultsSummary(done, source));
   }
 
   return (
@@ -107,7 +108,7 @@ export function ResultsScreen() {
 
 interface SearchProgressProps {
   session: SearchSession;
-  onDone: (done: DoneEvent, ranWith: SearchSession) => void;
+  onDone: (done: DoneEvent, web: WebEvent | null, ranWith: SearchSession) => void;
   onRetry: () => void;
 }
 
@@ -115,20 +116,25 @@ function SearchProgress({ session, onDone, onRetry }: SearchProgressProps) {
   const router = useRouter();
   const [progress, dispatch] = useReducer(reduce, START);
   const finished = useRef(false);
-  const handleDone = useEffectEvent((done: DoneEvent) => onDone(done, session));
+  const handleDone = useEffectEvent((done: DoneEvent, web: WebEvent | null) => onDone(done, web, session));
   const { sessionId } = session;
 
   useEffect(() => {
     if (finished.current) return;
     const controller = new AbortController();
     let started = false;
+    let web: WebEvent | null = null;
     (async () => {
       try {
         for await (const event of searchProducts(sessionId, controller.signal)) {
           started = true;
+          if (event.type === "web") {
+            web = event;
+            continue;
+          }
           if (event.type === "done") {
             finished.current = true;
-            handleDone(event);
+            handleDone(event, web);
             return;
           }
           dispatch({ type: "event", event });
@@ -155,7 +161,8 @@ function SearchProgress({ session, onDone, onRetry }: SearchProgressProps) {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="display text-[2.25rem] sm:text-[2.75rem]">{text.title}</h1>
+        <p className="eyebrow">{strings.source[sourceOf(session)]}</p>
+        <h1 className="display mt-1 text-[2.25rem] sm:text-[2.75rem]">{text.title}</h1>
         <p className="display mt-3 text-[1.5rem] font-semibold tabular-nums text-indigo" aria-hidden="true">
           {found === null ? text.starting : text.progress(found, slots.length, passed)}
         </p>
