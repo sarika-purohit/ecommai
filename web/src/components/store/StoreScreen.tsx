@@ -8,7 +8,7 @@ import { AiChat } from "@/components/chat/AiChat";
 import { ArrowLeftIcon, CloseIcon, SearchIcon, SparkleIcon, TagMark } from "@/components/icons";
 import { AiTile, ProductTile } from "@/components/store/ProductTile";
 import { getCatalog } from "@/lib/api";
-import { aiProgressStore, chatOpenStore, chatStore, showStore, type AiProgress } from "@/lib/chat";
+import { aiProgressStore, chatOpenStore, chatStore, newChat, showStore, type AiProgress } from "@/lib/chat";
 import { errorMessage } from "@/lib/errors";
 import { rupees } from "@/lib/format";
 import { categoryLabel } from "@/lib/labels";
@@ -25,16 +25,22 @@ interface Filters {
   q: string;
   category: string | null;
   gender: GenderFilter | null;
+  /** Lowest star rating, from the "4★ & up" filter. */
+  rating: number | null;
   sort: CatalogSort;
 }
+
+const RATING_FILTER = 4;
 
 function filtersFrom(params: URLSearchParams): Filters {
   const gender = params.get("gender");
   const sort = params.get("sort") as CatalogSort | null;
+  const rating = Number(params.get("rating"));
   return {
     q: params.get("q") ?? "",
     category: params.get("category"),
     gender: gender === "men" || gender === "women" ? gender : null,
+    rating: rating >= 1 && rating <= 5 ? rating : null,
     sort: sort && SORTS.includes(sort) ? sort : "relevance",
   };
 }
@@ -44,6 +50,7 @@ function hrefFor(filters: Filters): string {
   if (filters.q.trim()) params.set("q", filters.q.trim());
   if (filters.category) params.set("category", filters.category);
   if (filters.gender) params.set("gender", filters.gender);
+  if (filters.rating) params.set("rating", String(filters.rating));
   if (filters.sort !== "relevance") params.set("sort", filters.sort);
   const search = params.toString();
   return search ? `/?${search}` : "/";
@@ -75,8 +82,9 @@ export function StoreScreen() {
   }
 
   function search(q: string) {
-    showStore();
-    router.push(hrefFor({ q, category: null, gender: filters.gender, sort: "relevance" }));
+    // A new search from the search bar is a fresh start for the AI too.
+    newChat();
+    router.push(hrefFor({ q, category: null, gender: filters.gender, rating: filters.rating, sort: "relevance" }));
   }
 
   return (
@@ -159,7 +167,7 @@ function StoreHeader({ query, onSearch }: { query: string; onSearch: (q: string)
 function Catalog({ filters, go }: { filters: Filters; go: (next: Partial<Filters>) => void }) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
-  const key = `${filters.q}|${filters.category}|${filters.gender}|${filters.sort}|${attempt}`;
+  const key = `${filters.q}|${filters.category}|${filters.gender}|${filters.rating}|${filters.sort}|${attempt}`;
   const [loadedKey, setLoadedKey] = useState(key);
   if (loadedKey !== key) {
     setLoadedKey(key);
@@ -168,20 +176,26 @@ function Catalog({ filters, go }: { filters: Filters; go: (next: Partial<Filters
 
   useEffect(() => {
     let live = true;
-    getCatalog({ q: filters.q, category: filters.category, gender: filters.gender, sort: filters.sort }).then(
+    getCatalog({
+      q: filters.q,
+      category: filters.category,
+      gender: filters.gender,
+      min_rating: filters.rating,
+      sort: filters.sort,
+    }).then(
       (page) => live && setLoad({ status: "ready", page, items: page.items, more: "idle" }),
       (error: unknown) => live && setLoad({ status: "error", message: errorMessage(error) }),
     );
     return () => {
       live = false;
     };
-  }, [filters.q, filters.category, filters.gender, filters.sort, attempt]);
+  }, [filters.q, filters.category, filters.gender, filters.rating, filters.sort, attempt]);
 
   async function loadMore() {
     if (load.status !== "ready") return;
     setLoad({ ...load, more: "loading" });
     try {
-      const next = await getCatalog({ ...filters, page: load.page.page + 1 });
+      const next = await getCatalog({ ...filters, min_rating: filters.rating, page: load.page.page + 1 });
       setLoad({ status: "ready", page: next, items: [...load.items, ...next.items], more: "idle" });
     } catch {
       setLoad({ ...load, more: "idle" });
@@ -206,6 +220,15 @@ function Catalog({ filters, go }: { filters: Filters; go: (next: Partial<Filters
               {text.genders[gender]}
             </button>
           ))}
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={filters.rating === RATING_FILTER}
+            aria-label={text.ratingFilterLabel}
+            onClick={() => go({ rating: filters.rating === RATING_FILTER ? null : RATING_FILTER })}
+          >
+            {text.ratingFilter}
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor={sortId} className="text-base text-ink-soft">
@@ -301,6 +324,7 @@ function Summary({ page }: { page: CatalogPage }) {
   const notes = [
     page.understood.gender ? text.understoodGender(text.genders[page.understood.gender].toLowerCase()) : null,
     page.understood.max_price ? text.understoodPrice(rupees(page.understood.max_price)) : null,
+    page.understood.min_rating ? text.understoodRating(page.understood.min_rating) : null,
   ].filter(Boolean);
   return (
     <div role="status">

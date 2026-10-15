@@ -189,7 +189,7 @@ def delivery_date(
 
 
 def make_hit(brief: ShoppingBrief, product: Product, distance: float, now: datetime | None = None) -> Hit | None:
-    """The product as a hit with its total and delivery date, or None when it's beyond the soft limits."""
+    """The product as a hit with its total and delivery date; None beyond the soft limits or below the rating asked for."""
     total = order_total(brief, product)
     arrives, note = delivery_date(brief, product, now)
     budget, deadline = brief.budget_max_inr, brief.deadline_date
@@ -198,6 +198,8 @@ def make_hit(brief: ShoppingBrief, product: Product, distance: float, now: datet
     if over_budget and total > raised_budget(budget):
         return None
     if late and (arrives - deadline).days > DEADLINE_SLACK_DAYS:
+        return None
+    if brief.min_rating is not None and (product.rating_avg or 0) < brief.min_rating:
         return None
     return Hit(
         product=product,

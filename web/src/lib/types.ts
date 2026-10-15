@@ -32,6 +32,8 @@ export interface ShoppingBrief {
   nice_to_haves: NiceToHave[];
   rules_applied: string[];
   budget_max_inr: number | null;
+  /** Lowest average star rating accepted (1-5). */
+  min_rating: number | null;
   deadline_date: string | null;
   pincode: string | null;
   size: string | null;
@@ -256,6 +258,7 @@ export type BriefChange =
   | { type: "set_deadline"; deadline_date: string | null }
   | { type: "set_pincode"; pincode: string }
   | { type: "set_size"; size: string | null }
+  | { type: "set_min_rating"; min_rating: number | null }
   | { type: "set_source"; source: SearchSource };
 
 export interface BriefUpdateRequest {
@@ -436,6 +439,7 @@ export interface CatalogQuery {
   q?: string;
   category?: string | null;
   gender?: GenderFilter | null;
+  min_rating?: number | null;
   sort?: CatalogSort;
   page?: number;
   page_size?: number;
@@ -449,7 +453,7 @@ export interface CatalogPage {
   page_size: number;
   query: string;
   /** Filters read from the shopper's words, and words no product has. */
-  understood: { gender?: GenderFilter; max_price?: number; unmatched?: string[] };
+  understood: { gender?: GenderFilter; max_price?: number; min_rating?: number; unmatched?: string[] };
   categories: CategoryCount[];
   /** True when no product had every word, so the closest ones are shown. */
   partial: boolean;

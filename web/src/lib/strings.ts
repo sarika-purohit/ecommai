@@ -138,6 +138,9 @@ const en = {
       `${total === 1 ? "1 result" : `${total.toLocaleString("en-IN")} results`} for “${query}”`,
     understoodGender: (gender: string) => `for ${gender}`,
     understoodPrice: (price: string) => `under ${price}`,
+    understoodRating: (rating: number) => `rated ${rating}★ & up`,
+    ratingFilter: "4★ & up",
+    ratingFilterLabel: "Only products rated 4 stars and up",
     closest: "No product has every word you typed, so these are the closest.",
     notCarried: (words: string[]) => `We don’t have “${words.join(" ")}” in our catalogue.`,
     nothing: "Nothing found for that.",
@@ -209,6 +212,17 @@ const en = {
     sourceLabel: "Search in",
     seeDetails: "Full results and proof",
     busy: "Still working on your last message.",
+    sourceLater: {
+      live: "Okay, I’ll check live stores once you tell me what kind of product. The list on the page is our demo catalogue.",
+      catalog: "Okay, I’ll check the demo catalogue.",
+    } as Record<"live" | "catalog", string>,
+    liveNeedsType: " Live stores need a product type, so this list is from our demo catalogue.",
+    notChecked: (notes: string[]) => ` Not checked: ${notes.join("; ")}.`,
+    whatProduct: (kept: string[]) =>
+      `What kind of product are you looking for? Pick one or type it.${kept.length > 0 ? ` I’ll keep “${kept.join(", ")}”.` : ""}`,
+    picksLabel: "Product types",
+    browsing: (what: string, total: number) =>
+      `Here’s everything ${what} in the shop: ${total.toLocaleString("en-IN")} products of every kind. Say what kind of product, like “tops”, and I’ll check each one against what you asked.`,
   },
 
   pincode: {
@@ -526,6 +540,7 @@ const en = {
     addPincode: "Add your pincode",
     size: (size: string) => `Size ${size}`,
     addSize: "Add your size",
+    minRating: (rating: number) => `Rated ${rating}★ & up`,
     genders: {
       men: "men",
       women: "women",

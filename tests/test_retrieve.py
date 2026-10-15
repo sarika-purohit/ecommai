@@ -229,6 +229,14 @@ def test_products_up_to_20_percent_over_budget_are_kept_and_marked(selling, kept
     assert [hit.over_budget for hit in hits] == ([over_budget] if kept else [])
 
 
+def test_products_rated_below_the_minimum_are_left_out():
+    rated = brief(min_rating=4.0)
+    assert make_hit(rated, product().model_copy(update={"rating_avg": 4.0}), 0.1) is not None
+    assert make_hit(rated, product().model_copy(update={"rating_avg": 3.9}), 0.1) is None
+    assert make_hit(rated, product().model_copy(update={"rating_avg": None}), 0.1) is None
+    assert make_hit(brief(), product().model_copy(update={"rating_avg": 1.0}), 0.1) is not None
+
+
 def test_the_budget_counts_the_delivery_fee():
     hit = make_hit(brief(budget_max_inr=450), product(selling=450, delivery_fee=49), 0.1)
     assert (hit.total_price, hit.over_budget) == (499, True)

@@ -114,7 +114,7 @@ async function viaMock<T>(call: (mock: MockModule) => Promise<T>): Promise<T> {
 
 /** Fills in fields an older agent might leave out, so screens can rely on them. */
 function withDefaults(brief: ShoppingBrief): ShoppingBrief {
-  return { ...brief, not_checkable: brief.not_checkable ?? [], missing: brief.missing ?? [] };
+  return { ...brief, not_checkable: brief.not_checkable ?? [], missing: brief.missing ?? [], min_rating: brief.min_rating ?? null };
 }
 
 async function briefBody(input: BriefInput): Promise<BriefRequestBody> {
@@ -369,6 +369,7 @@ function catalogPath(query: CatalogQuery): string {
   if (query.q?.trim()) params.set("q", query.q.trim());
   if (query.category) params.set("category", query.category);
   if (query.gender) params.set("gender", query.gender);
+  if (query.min_rating) params.set("min_rating", String(query.min_rating));
   if (query.sort && query.sort !== "relevance") params.set("sort", query.sort);
   if (query.page && query.page > 1) params.set("page", String(query.page));
   if (query.page_size) params.set("page_size", String(query.page_size));

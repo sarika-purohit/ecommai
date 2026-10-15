@@ -711,6 +711,26 @@ def test_removing_a_must_have_keeps_the_rest_and_its_id_is_not_reused():
     assert [m.id for m in again.must_haves] == ["m1", "m3", "m2", "r1"]
 
 
+def test_a_star_rating_becomes_the_lowest_rating_accepted():
+    assert built(gemini_answer(min_rating=4)).brief.min_rating == 4.0
+    assert built(gemini_answer(min_rating=4.5)).brief.min_rating == 4.5
+    assert built(gemini_answer()).brief.min_rating is None
+    assert built(gemini_answer(min_rating=7)).brief.min_rating is None
+
+
+def test_the_edit_request_shows_the_lowest_rating():
+    client = FakeClient(fixture("short_sleeves_answer.json"))
+    rated = start_brief().model_copy(update={"min_rating": 4.0})
+    update_brief(rated, "no, short sleeves", today=TUESDAY, client=client, settings=FAST)
+    message = client.models.requests[0]
+    assert json.loads(message.split("CURRENT CHECKLIST:\n", 1)[1].split("\n", 1)[0])["min_rating"] == 4.0
+
+
+def test_the_prompt_reads_ratings_instead_of_setting_them_aside():
+    prompt = brief_module.system_prompt()
+    assert "**min_rating**" in prompt and "brands, ratings" not in prompt
+
+
 def test_assign_ids_matches_old_must_haves_in_any_written_form():
     previous = ShoppingBrief(
         category="Sunglasses", must_haves=[MustHave(id="m7", attribute="polarised", rule="is", value="yes")]

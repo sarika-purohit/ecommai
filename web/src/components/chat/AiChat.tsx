@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import { EditableTag } from "@/components/EditableTag";
 import { PincodeCard } from "@/components/home/PincodeCard";
@@ -14,6 +15,7 @@ import {
   chatOpenStore,
   chatSource,
   chatStore,
+  needsProduct,
   newChat,
   sendMessage,
   setChatSource,
@@ -50,7 +52,11 @@ interface Photo {
   url: string;
 }
 
+/** The side panel sits beside the products from this width; below it the chat covers them. */
+const SIDE_PANEL_QUERY = "(min-width: 1024px)";
+
 function ChatPanel() {
+  const router = useRouter();
   const chat = chatStore.use();
   const session = sessionStore.use();
   const results = resultsStore.use();
@@ -95,7 +101,12 @@ function ChatPanel() {
     const file = photo?.file ?? null;
     setDraft("");
     setPhoto(null);
-    void sendMessage(words, file);
+    void sendMessage(words, file).then((shopHref) => {
+      if (!shopHref) return;
+      // No product type yet: show the shop's products that fit, and get the chat out of the way on a phone.
+      router.push(shopHref, { scroll: false });
+      if (!window.matchMedia(SIDE_PANEL_QUERY).matches) chatOpenStore.set(false);
+    });
   }
 
   function submit(event: FormEvent) {
@@ -154,8 +165,14 @@ function ChatPanel() {
               <Intro disabled={busy || !pincode} onPick={send} />
             ) : (
               <ol className="flex flex-col gap-2.5" aria-live="polite">
-                {messages.map((message) => (
-                  <Message key={message.id} message={message} disabled={busy} />
+                {messages.map((message, index) => (
+                  <Message
+                    key={message.id}
+                    message={message}
+                    latest={index === messages.length - 1}
+                    disabled={busy || !pincode}
+                    onPick={send}
+                  />
                 ))}
               </ol>
             )}
@@ -252,7 +269,15 @@ function Intro({ disabled, onPick }: { disabled: boolean; onPick: (words: string
   );
 }
 
-function Message({ message, disabled }: { message: ChatMessage; disabled: boolean }) {
+interface MessageProps {
+  message: ChatMessage;
+  /** One-tap answers show only under the newest message. */
+  latest: boolean;
+  disabled: boolean;
+  onPick: (words: string) => void;
+}
+
+function Message({ message, latest, disabled, onPick }: MessageProps) {
   return (
     <li className="flex flex-col gap-2">
       <p className="bubble" data-role={message.role} data-error={message.error ? "" : undefined}>
@@ -278,6 +303,17 @@ function Message({ message, disabled }: { message: ChatMessage; disabled: boolea
           ))}
         </ul>
       ) : null}
+      {latest && message.picks ? (
+        <ul aria-label={text.picksLabel} className="flex flex-wrap gap-1.5 pl-1">
+          {message.picks.map((pick) => (
+            <li key={pick}>
+              <button type="button" className="chip min-h-9 px-3 text-base" disabled={disabled} onClick={() => onPick(pick)}>
+                {pick}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </li>
   );
 }
@@ -294,17 +330,21 @@ function Progress({ progress }: { progress: AiProgress }) {
 }
 
 /** What the AI is looking for now: the agent's checklist. Tapping ✕ drops a wish and searches again. */
-function Memory({ brief, disabled }: { brief: ShoppingBrief; disabled: boolean }) {
+function Memory({ brief, disabled: busy }: { brief: ShoppingBrief; disabled: boolean }) {
+  // Until the product type is known the checklist is only a guess, so its chips can't be edited.
+  const disabled = busy || needsProduct(brief);
   const remove = (change: BriefChange, label: string) => void applyChanges([change], text.removed(label));
   return (
     <div className="mb-2.5">
       <p className="eyebrow text-[0.8125rem]">{text.remembering}</p>
       <ul className="mt-1 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
-        <li>
-          <Tag>
-            <span className="tag-text">{categoryLabel(brief)}</span>
-          </Tag>
-        </li>
+        {needsProduct(brief) ? null : (
+          <li>
+            <Tag>
+              <span className="tag-text">{categoryLabel(brief)}</span>
+            </Tag>
+          </li>
+        )}
         {brief.must_haves.map((mustHave) => {
           const label = mustHaveLabel(mustHave);
           const change: BriefChange = mustHave.from_rule
@@ -342,6 +382,16 @@ function Memory({ brief, disabled }: { brief: ShoppingBrief; disabled: boolean }
               editKey="chat-budget"
               disabled={disabled}
               onRemove={() => remove({ type: "set_budget", budget_max_inr: null }, strings.labels.budget(rupees(brief.budget_max_inr ?? 0)))}
+            />
+          </li>
+        ) : null}
+        {brief.min_rating !== null ? (
+          <li>
+            <EditableTag
+              label={strings.labels.minRating(brief.min_rating)}
+              editKey="chat-rating"
+              disabled={disabled}
+              onRemove={() => remove({ type: "set_min_rating", min_rating: null }, strings.labels.minRating(brief.min_rating ?? 0))}
             />
           </li>
         ) : null}

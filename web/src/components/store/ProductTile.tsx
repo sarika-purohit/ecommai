@@ -58,6 +58,7 @@ export function AiTile({ card, brief }: { card: ResultCard; brief: ShoppingBrief
           {more > 0 ? <li className="text-[0.9375rem] text-ink-soft">{text.moreTicks(more)}</li> : null}
         </ul>
       ) : null}
+      <Rating rating={card.rating_avg} count={card.rating_count} />
     </TileFrame>
   );
 }

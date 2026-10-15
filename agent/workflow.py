@@ -82,6 +82,7 @@ SIZE_LOOKUPS = 6
 LOOKUP_WORKERS = 3
 LIVE_DEADLINE_NOTE = "Delivery dates for live stores are shown at their checkout"
 LIVE_SHOP_NOTE = "{}: check at the store's checkout"
+LIVE_RATING_NOTE = "Rated {}★ and up: live stores don't share star ratings"
 
 
 # ---------- Stream events ----------
@@ -408,6 +409,9 @@ def live_search(
     started = time.perf_counter()
     timings: dict[str, float] = {}
     brief, shop_notes = without_shop_details(brief)
+    if brief.min_rating is not None:
+        shop_notes.append(LIVE_RATING_NOTE.format(f"{brief.min_rating:g}"))
+        brief = brief.model_copy(update={"min_rating": None})
     workers = ThreadPoolExecutor(max_workers=1 + LOOKUP_WORKERS, thread_name_prefix="live")
     try:
         web = _OtherSites(live, deadline=started + web_wait_s) if live.find_on_web else None
@@ -863,6 +867,11 @@ class SetSize(BaseModel):
     size: str | None = Field(default=None, max_length=20)
 
 
+class SetMinRating(BaseModel):
+    type: Literal["set_min_rating"]
+    min_rating: float | None = Field(default=None, ge=1, le=5)
+
+
 Source = Literal["live", "catalog"]
 
 
@@ -873,7 +882,7 @@ class SetSource(BaseModel):
 
 BriefChange = Annotated[
     TextChange | AnswerChange | AddMustHave | EditMustHave | RemoveMustHave | SetRule | RemoveNiceToHave | SetBudget
-    | SetDeadline | SetPincode | SetSize | SetSource,
+    | SetDeadline | SetPincode | SetSize | SetMinRating | SetSource,
     Field(discriminator="type"),
 ]
 GEMINI_CHANGES = (TextChange, AnswerChange, AddMustHave)
@@ -940,6 +949,8 @@ def apply_change(
             brief = _resolved(brief.model_copy(update={"pincode": code}), "pincode")
         case SetSize(size=size):
             brief = _set_size(brief, size)
+        case SetMinRating(min_rating=rating):
+            brief = brief.model_copy(update={"min_rating": rating})
         case SetSource(source=chosen):
             source = chosen
         case _:
