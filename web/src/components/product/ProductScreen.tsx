@@ -32,7 +32,7 @@ export function ProductScreen({ productId }: { productId: string }) {
 
   return (
     <>
-      <AppHeader back={fromResults ? { href: "/results", label: text.back } : { href: "/", label: text.backHome }} />
+      <AppHeader back={{ href: "/", label: fromResults ? text.back : text.backHome }} />
       <main className="shell pb-40 pt-2">
         {isClient ? (
           <ProductLoader

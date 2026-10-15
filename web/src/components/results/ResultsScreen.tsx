@@ -94,7 +94,7 @@ export function ResultsScreen() {
 
   return (
     <>
-      <AppHeader back={{ href: "/understood", label: text.back }} />
+      <AppHeader back={{ href: "/", label: strings.store.backToShop }} />
       <main className="shell pb-16 pt-2">
         <p role="status" aria-live="polite" className="sr-only">
           {announcement}

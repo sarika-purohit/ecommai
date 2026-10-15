@@ -13,11 +13,15 @@ import {
   type BriefResponse,
   type BriefUpdateRequest,
   type BriefUpdateResponse,
+  type CatalogPage,
+  type CatalogQuery,
+  type CategoryCount,
   type CheckoutRequest,
   type CheckoutResponse,
   type DoneEvent,
   type FeedbackAction,
   type FeedbackRequest,
+  type GenderFilter,
   type Me,
   type MeUpdate,
   type MustHave,
@@ -116,6 +120,7 @@ function withDefaults(brief: ShoppingBrief): ShoppingBrief {
 
 async function briefBody(input: BriefInput): Promise<BriefRequestBody> {
   const body: BriefRequestBody = { pincode: input.pincode, language: input.language, source: input.source };
+  if (input.ask !== undefined) body.ask = input.ask;
   if (input.text) body.text = input.text;
   if (typeof input.image === "string") {
     body.image_url = input.image;
@@ -135,9 +140,13 @@ export async function createBrief(input: BriefInput): Promise<BriefResponse> {
   return { ...response, brief: withDefaults(response.brief) };
 }
 
-/** POST /api/brief/update: apply one edit to the checklist and get the whole checklist back. */
-export async function updateBrief(sessionId: string, change: BriefChange): Promise<BriefUpdateResponse> {
+/**
+ * POST /api/brief/update: apply one edit to the checklist and get the whole checklist back. The agent edits the
+ * checklist it saved for this session, so a follow-up like "for men" builds on everything said before.
+ */
+export async function updateBrief(sessionId: string, change: BriefChange, ask?: boolean): Promise<BriefUpdateResponse> {
   const body: BriefUpdateRequest = { session_id: sessionId, change };
+  if (ask !== undefined) body.ask = ask;
   const response = mockApi
     ? await viaMock((mock) => mock.updateBrief(sessionId, change))
     : await requestJson<BriefUpdateResponse>("POST", "/api/brief/update", body);
@@ -354,4 +363,28 @@ export async function clearTaste(): Promise<void> {
     return;
   }
   await requestJson("DELETE", "/api/me/taste");
+}
+
+function catalogPath(query: CatalogQuery): string {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.category) params.set("category", query.category);
+  if (query.gender) params.set("gender", query.gender);
+  if (query.sort && query.sort !== "relevance") params.set("sort", query.sort);
+  if (query.page && query.page > 1) params.set("page", String(query.page));
+  if (query.page_size) params.set("page_size", String(query.page_size));
+  const search = params.toString();
+  return `/api/catalog${search ? `?${search}` : ""}`;
+}
+
+/** GET /api/catalog: the demo catalogue for the store pages, listed or searched by keyword. No AI involved. */
+export async function getCatalog(query: CatalogQuery): Promise<CatalogPage> {
+  if (mockApi) return viaMock((mock) => mock.getCatalog(query));
+  return requestJson<CatalogPage>("GET", catalogPath(query));
+}
+
+/** GET /api/catalog/categories: product types and how many of each, for the category strip. */
+export async function getCategories(gender: GenderFilter | null): Promise<CategoryCount[]> {
+  if (mockApi) return viaMock((mock) => mock.getCategories(gender));
+  return requestJson<CategoryCount[]>("GET", `/api/catalog/categories${gender ? `?gender=${gender}` : ""}`);
 }

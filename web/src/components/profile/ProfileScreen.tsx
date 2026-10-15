@@ -9,10 +9,11 @@ import { RuleEditor, type RuleDraft } from "@/components/profile/RuleEditor";
 import { FieldEditor } from "@/components/understood/Editors";
 import { clearTaste, deleteMe, getMe, saveRules, updateMe } from "@/lib/api";
 import { forgetDevice, signInRequired, signOut, useAuth } from "@/lib/auth";
+import { newChat } from "@/lib/chat";
 import { canRetry, errorMessage } from "@/lib/errors";
 import { isValidPincode } from "@/lib/format";
 import { mustHaveLabel } from "@/lib/labels";
-import { clearSearch, pincodeStore } from "@/lib/session";
+import { pincodeStore } from "@/lib/session";
 import { useIsClient } from "@/lib/stored";
 import { strings } from "@/lib/strings";
 import type { Me, MustHave } from "@/lib/types";
@@ -134,9 +135,9 @@ function Profile({ me }: { me: Me }) {
   );
 }
 
-/** Signs out, after forgetting this device's copy of the search (and the pincode, when the data was deleted). */
+/** Signs out, after forgetting this device's copy of the search and chat (and the pincode, when the data was deleted). */
 async function leave(deleted: boolean) {
-  clearSearch();
+  newChat();
   if (deleted) pincodeStore.set(null);
   if (!signInRequired) {
     forgetDevice();

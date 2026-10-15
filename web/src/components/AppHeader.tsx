@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowLeftIcon, PersonIcon, TagMark } from "@/components/icons";
 import { signInRequired, signOut, useAuth } from "@/lib/auth";
-import { clearSearch } from "@/lib/session";
+import { newChat } from "@/lib/chat";
 import { strings } from "@/lib/strings";
 
 interface AppHeaderProps {
@@ -25,9 +25,14 @@ export function AppHeader({ back }: AppHeaderProps) {
           {strings.appName}
         </p>
       )}
-      {signInRequired ? <AccountMenu /> : <ProfileLink />}
+      <AccountButton />
     </header>
   );
+}
+
+/** The account menu with sign-in on; with it off there's no one to sign out, so just a link to the profile. */
+export function AccountButton() {
+  return signInRequired ? <AccountMenu /> : <ProfileLink />;
 }
 
 function ProfileLink() {
@@ -73,7 +78,7 @@ function AccountMenu() {
 
   async function handleSignOut() {
     setOpen(false);
-    clearSearch();
+    newChat();
     await signOut();
   }
 

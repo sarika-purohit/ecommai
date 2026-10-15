@@ -11,12 +11,17 @@ import type {
   BriefInput,
   BriefResponse,
   BriefUpdateResponse,
+  CatalogItem,
+  CatalogPage,
+  CatalogQuery,
+  CategoryCount,
   Check,
   CheckoutRequest,
   CheckoutResponse,
   DetailValue,
   Evidence,
   FeedbackRequest,
+  GenderFilter,
   Me,
   MeUpdate,
   MustHave,
@@ -1212,4 +1217,74 @@ export async function deleteMe(): Promise<OkResponse> {
     browserStorage("session")?.removeItem(SESSIONS_KEY);
   } catch {}
   return { ok: true };
+}
+
+// ---------- Store pages ----------
+
+function catalogItem(product: CatalogProduct): CatalogItem {
+  return {
+    id: product.id,
+    title: product.title,
+    brand: product.brand,
+    gender: product.gender,
+    article_type: product.articleType,
+    base_colour: product.baseColour,
+    usage: product.usage,
+    price: product.price,
+    thumb: `${BUCKET}/thumb/${product.id}.jpg`,
+    photo: `${BUCKET}/gemini/${product.id}.jpg`,
+    rating_avg: product.rating_avg,
+    rating_count: product.rating_count,
+  };
+}
+
+const MOCK_GENDERS: Record<string, GenderFilter> = { men: "men", mens: "men", man: "men", women: "women", womens: "women", ladies: "women" };
+
+function stemOf(word: string): string {
+  return word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word;
+}
+
+/** A small stand-in for agent/browse.py: every word must appear in the product's words; gender words filter. */
+export async function getCatalog(query: CatalogQuery): Promise<CatalogPage> {
+  await sleep(250);
+  const words = (query.q ?? "").toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const gender = query.gender ?? words.map((word) => MOCK_GENDERS[word]).find(Boolean) ?? null;
+  const wanted = words.filter((word) => !MOCK_GENDERS[word] && !["for", "with", "and", "a", "the"].includes(word)).map(stemOf);
+  const matching = [...KURTAS, ...WATCHES].filter((product) => {
+    if (gender && product.gender !== gender && product.gender !== "unisex") return false;
+    const own = `${product.title} ${product.brand ?? ""} ${product.articleType} ${product.baseColour ?? ""}`.toLowerCase();
+    const stems = new Set((own.match(/[a-z0-9]+/g) ?? []).map(stemOf));
+    return wanted.every((word) => stems.has(word));
+  });
+  const categories = countCategories(matching);
+  const filtered = query.category ? matching.filter((product) => product.articleType === query.category) : matching;
+  const sorted = [...filtered].sort((a, b) => {
+    if (query.sort === "price_low") return a.price.selling - b.price.selling;
+    if (query.sort === "price_high") return b.price.selling - a.price.selling;
+    if (query.sort === "rating") return (b.rating_avg ?? 0) - (a.rating_avg ?? 0);
+    return 0;
+  });
+  const page = query.page ?? 1;
+  const size = query.page_size ?? 24;
+  return {
+    items: sorted.slice((page - 1) * size, page * size).map(catalogItem),
+    total: sorted.length,
+    page,
+    page_size: size,
+    query: query.q ?? "",
+    understood: gender && !query.gender ? { gender } : {},
+    categories,
+    partial: false,
+  };
+}
+
+function countCategories(products: CatalogProduct[]): CategoryCount[] {
+  const counts = new Map<string, number>();
+  for (const product of products) counts.set(product.articleType, (counts.get(product.articleType) ?? 0) + 1);
+  return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+}
+
+export async function getCategories(gender: GenderFilter | null): Promise<CategoryCount[]> {
+  await sleep(100);
+  return countCategories([...KURTAS, ...WATCHES].filter((p) => !gender || p.gender === gender || p.gender === "unisex"));
 }
