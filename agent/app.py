@@ -8,6 +8,9 @@ Every /api/* endpoint needs `Authorization: Bearer <Firebase ID token>`. POST /a
 events (see agent/workflow.py for the order); comment lines (": ping") keep the stream open while products are
 checked. Only the origins in ALLOWED_ORIGINS may call it from a browser.
 
+GET /api/catalog lists and keyword-searches the demo catalogue for the store pages (agent/browse.py); it makes no
+Gemini call. The AI chat sends `ask: false`, so a missing size or gender never holds the search up with a question.
+
 A search looks in live Shopify stores (source 'live', the default) or our demo catalogue ('catalog'). Live product
 ids are Shopify ids ('gid://shopify/p/...'); their product page and checkout fetch them fresh from Shopify, and
 checkout sends the shopper to the store's own checkout. GET /.well-known/ucp serves our UCP agent profile (public).
@@ -25,14 +28,14 @@ from datetime import datetime
 from functools import cache
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from agent import auth, cards, delivery, workflow
+from agent import auth, browse, cards, delivery, workflow
 from agent import brief as briefs
 from agent.auth import User, current_user
 from agent.learn import update_taste
@@ -66,12 +69,15 @@ class Backend:
     read_link: Callable[[str], tuple[bytes, str]] = workflow.fetch_link
     now: Callable[[], datetime | None] = field(default=lambda: None)
     live: workflow.LiveServices | None = None
+    catalog: browse.CatalogIndex | None = None
 
 
 @cache
 def default_backend() -> Backend:
     services = workflow.default_services()
-    return Backend(store=default_store(), services=services, live=workflow.default_live(services))
+    store = default_store()
+    catalog = browse.CatalogIndex(browse.firestore_loader(store.db))
+    return Backend(store=store, services=services, live=workflow.default_live(services), catalog=catalog)
 
 
 def backend_of(request: Request) -> Backend:
@@ -89,6 +95,7 @@ class BriefRequest(BaseModel):
     pincode: str = Field(max_length=12)
     language: str = Field(default="en", max_length=16)
     source: workflow.Source = "live"
+    ask: bool = Field(default=True, description="False: never ask a question; search with what was said")
 
 
 class BriefResponse(BaseModel):
@@ -100,6 +107,7 @@ class BriefResponse(BaseModel):
 class BriefUpdateRequest(BaseModel):
     session_id: str
     change: workflow.BriefChange
+    ask: bool = True
 
 
 class BriefUpdateResponse(BaseModel):
@@ -204,6 +212,16 @@ def me_of(user: User, profile: UserDoc) -> Me:
     )
 
 
+def without_question(brief: ShoppingBrief, ask: bool) -> ShoppingBrief:
+    return brief if ask else brief.model_copy(update={"question": None})
+
+
+def catalog_of(backend: Backend) -> browse.CatalogIndex:
+    if backend.catalog is None:
+        backend.catalog = browse.CatalogIndex(browse.firestore_loader(backend.store.db))
+    return backend.catalog
+
+
 def sse(event: workflow.Event) -> str:
     return f"event: {event.kind}\ndata: {event.model_dump_json()}\n\n"
 
@@ -266,7 +284,7 @@ def make_brief(body: BriefRequest, user: User = Depends(current_user), backend: 
         except Exception as error:
             log.exception("photo upload failed")
             raise HTTPException(503, "We couldn't save your photo. Please try again.") from error
-    brief = outcome.brief.model_copy(update={"reference_image_url": photo})
+    brief = without_question(outcome.brief, body.ask).model_copy(update={"reference_image_url": photo})
     session = store.new_session(user.uid, brief, query_text=text, rules=profile.rules, photo=photo, source=body.source)
     if not profile.pincode:
         store.update_user(user.uid, {"pincode": pincode})
@@ -296,7 +314,7 @@ def update_brief(body: BriefUpdateRequest, user: User = Depends(current_user), b
         raise HTTPException(503, BUSY) from error
     except ValueError as error:
         raise bad_request(str(error)) from error
-    session.brief = edited.brief
+    session.brief = without_question(edited.brief, body.ask)
     session.rules = edited.rules
     session.disabled_rules = sorted(edited.disabled)
     if edited.words:
@@ -305,7 +323,7 @@ def update_brief(body: BriefUpdateRequest, user: User = Depends(current_user), b
         session.source = edited.source
     session.history = [*session.history, {"change": body.change.model_dump(mode="json")}][-MAX_HISTORY:]
     backend.store.update_session(session, ["brief", "rules", "disabled_rules", "query_text", "history", "source"])
-    return BriefUpdateResponse(brief=edited.brief)
+    return BriefUpdateResponse(brief=session.brief)
 
 
 @router.post("/api/search")
@@ -430,6 +448,30 @@ def product(
         session = own_session(backend, user, session_id)
         ticks = workflow.saved_ticks(session.brief, found, backend.services.check_cache)
     return JSONResponse(cards.product_view(found, ticks))
+
+
+@router.get("/api/catalog", response_model=browse.CatalogPage)
+def catalog(
+    q: str = Query(default="", max_length=browse.MAX_QUERY_CHARS),
+    category: str | None = Query(default=None, max_length=60),
+    gender: browse.GenderFilter | None = None,
+    max_price: int | None = Query(default=None, gt=0),
+    sort: browse.Sort = "relevance",
+    page: int = Query(default=1, ge=1, le=500),
+    page_size: int = Query(default=browse.PAGE_SIZE, ge=1, le=browse.MAX_PAGE_SIZE),
+    user: User = Depends(current_user),
+    backend: Backend = Depends(backend_of),
+):
+    return catalog_of(backend).search(
+        q, category=category, gender=gender, max_price=max_price, sort=sort, page=page, page_size=page_size
+    )
+
+
+@router.get("/api/catalog/categories", response_model=list[browse.CategoryCount])
+def catalog_categories(
+    gender: browse.GenderFilter | None = None, user: User = Depends(current_user), backend: Backend = Depends(backend_of)
+):
+    return catalog_of(backend).categories(gender)
 
 
 @router.get("/api/rules", response_model=RulesResponse)

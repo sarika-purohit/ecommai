@@ -222,6 +222,8 @@ export interface BriefInput {
   pincode: string;
   language: string;
   source: SearchSource;
+  /** False in the AI chat: never ask a question, search with what was said. */
+  ask?: boolean;
 }
 
 export interface BriefRequestBody {
@@ -232,6 +234,7 @@ export interface BriefRequestBody {
   pincode: string;
   language: string;
   source: SearchSource;
+  ask?: boolean;
 }
 
 export interface BriefResponse {
@@ -258,6 +261,7 @@ export type BriefChange =
 export interface BriefUpdateRequest {
   session_id: string;
   change: BriefChange;
+  ask?: boolean;
 }
 
 export interface BriefUpdateResponse {
@@ -400,4 +404,53 @@ export interface CheckoutResponse {
    * /checkout?product=&size=; live products go to the store's own site.
    */
   redirect_url: string;
+}
+
+// ---------- The store pages (agent/browse.py) ----------
+
+export type CatalogSort = "relevance" | "price_low" | "price_high" | "rating";
+export type GenderFilter = "men" | "women";
+
+/** A demo catalogue product as a store page lists it: no details, reviews or embedding. */
+export interface CatalogItem {
+  id: string;
+  title: string;
+  brand: string | null;
+  gender: string;
+  article_type: string;
+  base_colour: string | null;
+  usage: string | null;
+  price: Price | null;
+  thumb: string | null;
+  photo: string | null;
+  rating_avg: number | null;
+  rating_count: number;
+}
+
+export interface CategoryCount {
+  name: string;
+  count: number;
+}
+
+export interface CatalogQuery {
+  q?: string;
+  category?: string | null;
+  gender?: GenderFilter | null;
+  sort?: CatalogSort;
+  page?: number;
+  page_size?: number;
+}
+
+/** GET /api/catalog */
+export interface CatalogPage {
+  items: CatalogItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  query: string;
+  /** Filters read from the shopper's words, and words no product has. */
+  understood: { gender?: GenderFilter; max_price?: number; unmatched?: string[] };
+  categories: CategoryCount[];
+  /** True when no product had every word, so the closest ones are shown. */
+  partial: boolean;
 }

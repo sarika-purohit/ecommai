@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowLeftIcon, PersonIcon, TagMark } from "@/components/icons";
 import { signOut, useAuth } from "@/lib/auth";
-import { clearSearch } from "@/lib/session";
+import { newChat } from "@/lib/chat";
 import { strings } from "@/lib/strings";
 
 interface AppHeaderProps {
@@ -30,7 +30,7 @@ export function AppHeader({ back }: AppHeaderProps) {
   );
 }
 
-function AccountMenu() {
+export function AccountMenu() {
   const auth = useAuth();
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -61,7 +61,7 @@ function AccountMenu() {
 
   async function handleSignOut() {
     setOpen(false);
-    clearSearch();
+    newChat();
     await signOut();
   }
 

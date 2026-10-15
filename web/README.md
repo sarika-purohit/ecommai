@@ -35,7 +35,8 @@ Before a pull request: `npm run lint`, `npx tsc --noEmit` and `npm run build`.
 
 | Route | Screen |
 |---|---|
-| `/` | Sign-in, then home: the request box, photo, where to look ("Live stores" or "Demo catalogue", remembered in this browser) and example chips |
+| `/` | Sign-in, then the store: keyword search (`?q=`), Men/Women, categories and sort over the demo catalogue (`GET /api/catalog`, no AI). The round ✨ button opens the AI chat: the first message makes a checklist, every later one ("for men", "cheaper") edits it, and the checked results replace the product grid. The chat never asks a question (`ask: false`); the checklist shows as chips with ✕ to drop a wish. Chat logic: `src/lib/chat.ts` |
+| `/ask` | The step-by-step search: the request box, photo, where to look ("Live stores" or "Demo catalogue", remembered in this browser) and example chips, then `/understood` and `/results` |
 | `/understood` | "Here's what I understood": the checklist as editable chips, locked rule chips, one question, and where to look (`set_source`) |
 | `/results` | Live checking (thumbnails stamped pass, fail or not sure as checks land), then the results: cards with total price, delivery date and the tick-list; tap a tick for its proof. Below: "what to give up" (one tap edits the checklist and searches again), `cheaper` / `more formal` / `different colour`, the ones we couldn't fully confirm, why others were rejected, and "On other sites" (Grounding with Google Search, not checked by us). A link under the summary searches the other source |
 | `/product/<id>` | Every photo size, every tick with proof, reviews (flagged ones hidden behind "hidden: suspicious"), size picker, "Buy on store". Live products (ids are Shopify GIDs, URL-encoded) show the store and its page, no reviews, and "Buy on <store>" opens the store in a new tab |
