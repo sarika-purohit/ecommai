@@ -83,6 +83,7 @@ AGENT_SETTINGS = {
     "EMBEDDING_DIMENSIONS",
     "ADK_MODEL",
     "UCP_AGENT_PROFILE_URL",
+    "SIGN_IN",
 }
 AGENT_SETTING_PREFIXES = ("GEMINI_", "MODEL_ARMOR_")
 NEVER_DEPLOYED = ("AUTH_MODE", "KAGGLE_", "GOOGLE_CLOUD_QUOTA_PROJECT")
@@ -585,7 +586,9 @@ def add_authorized_domains(api: Api, project: str, hosts: Sequence[str]) -> Resu
     return Result("sign-in domains", "ok", ", ".join(hosts))
 
 
-def deploy_web(api: Api, settings: Mapping[str, str], web_env: Path, min_instances: int) -> dict:
+def deploy_web(
+    api: Api, settings: Mapping[str, str], web_env: Path, min_instances: int, image: str | None = None
+) -> dict:
     project = settings["GOOGLE_CLOUD_PROJECT"]
     agent = get_service(api, service_path(project, AGENT))
     if agent is None:
@@ -594,7 +597,7 @@ def deploy_web(api: Api, settings: Mapping[str, str], web_env: Path, min_instanc
     if missing:
         raise DeployError(f"The web app isn't ready for Cloud Run yet; add {', '.join(missing)}")
     args = web_build_args(dotenv_values(web_env), agent["uri"])
-    image = build_and_push(api, project, "web", ROOT / "web" / "Dockerfile", ROOT / "web", args)
+    image = image or build_and_push(api, project, "web", ROOT / "web" / "Dockerfile", ROOT / "web", args)
     name = service_path(project, WEB)
     service, changed = apply_service(api, name, get_service(api, name), web_service(project, image, min_instances))
     print(f"{'DEPLOYED' if changed else 'SAME':8} {WEB:22} {service['latestReadyRevision'].rsplit('/', 1)[-1]}")
@@ -689,6 +692,7 @@ def main() -> None:
     web = commands.add_parser("web", help="build and deploy the web app, then point the agent at it")
     web.add_argument("--web-env", type=Path, default=ROOT / "web" / ".env.local", help="the Firebase web settings")
     web.add_argument("--min-instances", type=int, default=0)
+    web.add_argument("--image", help="deploy this pushed image instead of building one")
     commands.add_parser("status", help="both services' address, revision, image and settings")
     log = commands.add_parser("logs", help="recent Cloud Run logs")
     log.add_argument("--service", choices=[AGENT, WEB], default=AGENT)
@@ -710,7 +714,7 @@ def main() -> None:
             print(f"\nAgent: {service['uri']}  ({time.monotonic() - started:.0f} s)")
             print(f"Next: scripts/smoke_test.sh {service['uri']}")
         elif args.command == "web":
-            service = deploy_web(api, settings, args.web_env, args.min_instances)
+            service = deploy_web(api, settings, args.web_env, args.min_instances, args.image)
             print(f"\nWeb app: {service['uri']}  ({time.monotonic() - started:.0f} s)")
         elif args.command == "status":
             status(api, project)

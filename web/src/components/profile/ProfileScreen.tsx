@@ -8,7 +8,7 @@ import { ScreenPlaceholder } from "@/components/NoSession";
 import { RuleEditor, type RuleDraft } from "@/components/profile/RuleEditor";
 import { FieldEditor } from "@/components/understood/Editors";
 import { clearTaste, deleteMe, getMe, saveRules, updateMe } from "@/lib/api";
-import { signOut, useAuth } from "@/lib/auth";
+import { forgetDevice, signInRequired, signOut, useAuth } from "@/lib/auth";
 import { canRetry, errorMessage } from "@/lib/errors";
 import { isValidPincode } from "@/lib/format";
 import { mustHaveLabel } from "@/lib/labels";
@@ -112,7 +112,7 @@ function Profile({ me }: { me: Me }) {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="display text-[2.25rem] sm:text-[2.75rem]">{text.title}</h1>
-        {name || email ? (
+        {!signInRequired ? null : name || email ? (
           <p className="mt-2">
             {name ? <span className="block font-semibold">{name}</span> : null}
             {email ? <span className="block text-ink-soft">{email}</span> : null}
@@ -125,9 +125,11 @@ function Profile({ me }: { me: Me }) {
       <RulesSection initial={me.rules} />
       <TasteSection initial={me.has_taste} />
       <DataSection />
-      <button type="button" className="btn btn-secondary w-full" onClick={() => void leave(false)}>
-        {text.signOut}
-      </button>
+      {signInRequired ? (
+        <button type="button" className="btn btn-secondary w-full" onClick={() => void leave(false)}>
+          {text.signOut}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -136,6 +138,11 @@ function Profile({ me }: { me: Me }) {
 async function leave(deleted: boolean) {
   clearSearch();
   if (deleted) pincodeStore.set(null);
+  if (!signInRequired) {
+    forgetDevice();
+    window.location.reload();
+    return;
+  }
   await signOut();
 }
 

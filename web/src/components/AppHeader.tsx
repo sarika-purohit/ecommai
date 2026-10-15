@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowLeftIcon, PersonIcon, TagMark } from "@/components/icons";
-import { signOut, useAuth } from "@/lib/auth";
+import { signInRequired, signOut, useAuth } from "@/lib/auth";
 import { clearSearch } from "@/lib/session";
 import { strings } from "@/lib/strings";
 
@@ -25,8 +25,20 @@ export function AppHeader({ back }: AppHeaderProps) {
           {strings.appName}
         </p>
       )}
-      <AccountMenu />
+      {signInRequired ? <AccountMenu /> : <ProfileLink />}
     </header>
+  );
+}
+
+function ProfileLink() {
+  return (
+    <Link
+      href="/profile"
+      className="flex size-11 items-center justify-center rounded-full bg-wash text-indigo"
+      aria-label={strings.account.profile}
+    >
+      <PersonIcon className="size-5" />
+    </Link>
   );
 }
 

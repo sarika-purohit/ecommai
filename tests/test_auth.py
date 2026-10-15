@@ -87,6 +87,33 @@ def test_dev_mode_is_refused_on_cloud_run():
         auth.auth_mode({"AUTH_MODE": "open"})
 
 
+DEVICE = {"X-Device-Id": "0f6c2a0e-6b1d-4c43-9a51-3c1f7d2b8e11"}
+
+
+def test_with_sign_in_off_each_browser_is_its_own_shopper_even_on_cloud_run():
+    client, wired = signed_in_client({"SIGN_IN": "off", "K_SERVICE": "ecommai-agent"})
+    me = client.get("/api/me", headers=DEVICE)
+    assert me.status_code == 200 and not me.json()["name"]
+    assert client.put("/api/me", json={"pincode": BENGALURU}, headers=DEVICE).status_code == 200
+    assert client.put("/api/me", json={"pincode": BENGALURU}, headers=DEVICE).status_code == 200
+    assert f"device-{DEVICE['X-Device-Id']}" in wired.store.db.docs("users")
+    assert client.get("/api/me").status_code == 400
+    assert client.get("/api/me", headers={"X-Device-Id": "short"}).status_code == 400
+    assert client.get("/api/me", headers={**DEVICE, **GOOD}).json()["name"] == "Neha"
+
+
+def test_with_sign_in_off_each_address_is_limited():
+    limiter = auth.RateLimiter(limit=2, window_s=60, clock=lambda: 0.0)
+    gate = Authenticator(auth.OPEN, verify, limiter)
+    device = DEVICE["X-Device-Id"]
+    assert gate.user_for(None, device, "1.2.3.4").uid == f"device-{device}"
+    gate.user_for(None, device, "1.2.3.4")
+    with pytest.raises(HTTPException) as refused:
+        gate.user_for(None, device, "1.2.3.4")
+    assert refused.value.status_code == 429
+    assert gate.user_for(None, device, "5.6.7.8").uid == f"device-{device}"
+
+
 def test_the_health_check_needs_no_token():
     client, _ = signed_in_client()
     assert client.get("/healthz").status_code == 200

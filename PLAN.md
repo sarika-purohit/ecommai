@@ -377,6 +377,8 @@ The app is simple, friendly and mobile-first, with big readable text. It should 
 
 Shoppers sign in once with Google, so their rules, sizes and style are saved. Shared shortlist links open without signing in.
 
+**For now, sign-in is off.** The app opens straight on the search page. Each browser gets a random ID, kept on the phone, and the shopper's rules, sizes and style are saved under it. The agent allows 120 requests per 10 minutes from one internet address, so an open link can't run up the bill. Google sign-in comes back by setting `SIGN_IN` to empty on the agent and building the web app with `NEXT_PUBLIC_SIGN_IN=on`.
+
 1. **Home.** One big box ("What are you looking for?") with a mic button and a camera button. Below it, three example chips to tap:
  - "Cotton kurta with pockets under ₹1,200"
  - "Like this, but in white" (with a photo)
@@ -709,6 +711,7 @@ class Verification(BaseModel):
 | `/.well-known/agent-card.json`, `/a2a` | A2A | Our agent for Gemini Enterprise and others |
 
 **Sign-in:**
+- **While sign-in is off** (`SIGN_IN=off`), a request without a token sends `X-Device-Id: <random id>` instead, and the shopper is `device-<id>`. Too many requests from one address get a 429.
 - **App endpoints** (`/api/*`) need the shopper's Firebase sign-in token in the `Authorization: Bearer <token>` header; the agent checks it on every request. The one exception is `GET /api/share/{id}`.
 - **`/mcp` and `/a2a`** use their own OAuth sign-in.
 - **The browser calls the Cloud Run agent directly,** not through Firebase, so streaming isn't held up. The agent only accepts requests from our app's web address (CORS).

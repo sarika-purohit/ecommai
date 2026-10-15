@@ -18,11 +18,16 @@ export type AuthState =
   | { status: "signed-out"; error: SignInError | null; busy: boolean }
   | { status: "signed-in"; user: AuthUser }
   | { status: "demo" }
+  | { status: "open" }
   | { status: "misconfigured" };
 
 type AuthModule = typeof import("firebase/auth");
 
 const DEMO_KEY = "ecommai.demo";
+const DEVICE_KEY = "ecommai.device";
+
+/** Google sign-in is off unless the app is built with NEXT_PUBLIC_SIGN_IN=on: each browser is then its own shopper. */
+export const signInRequired = process.env.NEXT_PUBLIC_SIGN_IN === "on";
 
 const SERVER_STATE: AuthState = { status: "loading" };
 const REDIRECT_FALLBACK_CODES = new Set([
@@ -53,6 +58,7 @@ function writeFlag(key: string, on: boolean) {
 }
 
 function initialState(): AuthState {
+  if (!signInRequired) return { status: "open" };
   if (isFirebaseConfigured) return { status: "loading" };
   if (!demoModeAllowed) return { status: "misconfigured" };
   return readFlag(DEMO_KEY) ? { status: "demo" } : { status: "signed-out", error: null, busy: false };
@@ -103,7 +109,7 @@ function loadFirebase(): Promise<{ auth: Auth; module: AuthModule }> {
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
-  if (isFirebaseConfigured) void loadFirebase();
+  if (signInRequired && isFirebaseConfigured) void loadFirebase();
   return () => {
     listeners.delete(listener);
   };
@@ -115,7 +121,7 @@ function getSnapshot(): AuthState {
 }
 
 function getServerSnapshot(): AuthState {
-  return SERVER_STATE;
+  return signInRequired ? SERVER_STATE : { status: "open" };
 }
 
 export function useAuth(): AuthState {
@@ -157,8 +163,28 @@ export async function signOut(): Promise<void> {
 
 /** The Firebase ID token for API calls, or null in demo mode. The SDK refreshes it when it's close to expiry. */
 export async function getIdToken(): Promise<string | null> {
-  if (!isFirebaseConfigured) return null;
+  if (!signInRequired || !isFirebaseConfigured) return null;
   const { auth } = firebase ?? (await loadFirebase());
   await auth.authStateReady();
   return auth.currentUser ? auth.currentUser.getIdToken() : null;
+}
+
+/** This browser's random shopper id, made on first use, sent as X-Device-Id when sign-in is off. */
+export function deviceId(): string {
+  try {
+    const saved = localStorage.getItem(DEVICE_KEY);
+    if (saved) return saved;
+    const made = crypto.randomUUID();
+    localStorage.setItem(DEVICE_KEY, made);
+    return made;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
+/** Forgets this browser's shopper id, so the next request starts a fresh shopper. */
+export function forgetDevice() {
+  try {
+    localStorage.removeItem(DEVICE_KEY);
+  } catch {}
 }

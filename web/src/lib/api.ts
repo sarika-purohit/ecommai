@@ -1,6 +1,6 @@
 "use client";
 
-import { getIdToken } from "@/lib/auth";
+import { deviceId, getIdToken, signInRequired } from "@/lib/auth";
 import { apiBaseUrl, mockApi } from "@/lib/config";
 import { blobToBase64, shrinkPhoto } from "@/lib/image";
 import { webLink } from "@/lib/links";
@@ -59,6 +59,7 @@ function kindFor(status: number): ApiErrorKind {
 }
 
 async function headers(extra: Record<string, string>): Promise<Record<string, string>> {
+  if (!signInRequired) return { ...extra, "X-Device-Id": deviceId() };
   const token = await getIdToken();
   return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
 }

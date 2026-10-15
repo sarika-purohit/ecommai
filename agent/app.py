@@ -581,7 +581,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=allowed_origins(env),
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Device-Id"],
         max_age=600,
     )
     app.add_exception_handler(RequestValidationError, validation_error)
