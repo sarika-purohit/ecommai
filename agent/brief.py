@@ -218,6 +218,7 @@ class Answer(BaseModel):
     nice_to_haves: list[Wish] = Field(default_factory=list)
     not_checkable: list[str] = Field(default_factory=list)
     budget_max_inr: int = 0
+    min_rating: float = 0
     deadline: DeadlineAnswer = Field(default_factory=DeadlineAnswer)
     size: str = ""
     language: str = ""
@@ -251,6 +252,7 @@ def answer_schema() -> type[BaseModel]:
         nice_to_haves=(list[wish], ...),
         not_checkable=(list[str], Field(description="wishes no listed detail can express, in a few words each")),
         budget_max_inr=(int, Field(description="0 when no budget is given")),
+        min_rating=(float, Field(description="lowest star rating accepted, 1-5; 0 when not said")),
         deadline=(deadline, ...),
         size=(str, Field(description="as the shopper said it; empty when not given")),
         language=(Literal[LANGUAGES], ...),
@@ -570,6 +572,7 @@ def build_brief(
     gender = answer.gender if answer.gender in GENDERS else None
     size = normalize_size(group, answer.size, gender)
     budget = answer.budget_max_inr if answer.budget_max_inr > 0 else None
+    min_rating = round(answer.min_rating, 1) if 1 <= answer.min_rating <= 5 else None
     deadline = resolve_deadline(answer.deadline, today, previous.deadline_date if previous else None)
     question, missing = settle_question(
         answer,
@@ -589,6 +592,7 @@ def build_brief(
         must_haves=assign_ids(must, previous),
         nice_to_haves=nice,
         budget_max_inr=budget,
+        min_rating=min_rating,
         deadline_date=deadline,
         pincode=code,
         size=size,
@@ -682,6 +686,7 @@ def checklist_view(brief: ShoppingBrief) -> dict[str, Any]:
         ],
         "nice_to_haves": nice,
         "budget_max_inr": brief.budget_max_inr or 0,
+        "min_rating": brief.min_rating or 0,
         "deadline": brief.deadline_date.isoformat() if brief.deadline_date else "none",
         "size": brief.size or "",
         "not_checkable": brief.not_checkable,

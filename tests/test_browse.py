@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from agent import browse
@@ -39,9 +40,9 @@ def test_plurals_and_singulars_meet():
 
 
 def test_gender_and_price_words_become_filters():
-    wanted, gender, max_price = browse.read_query("Cotton kurta for MEN under ₹1,500")
+    wanted, gender, max_price, _ = browse.read_query("Cotton kurta for MEN under ₹1,500")
     assert (wanted, gender, max_price) == (["cotton", "kurta"], "men", 1500)
-    assert browse.read_query("watch below 3k") == (["watch"], None, 3000)
+    assert browse.read_query("watch below 3k") == (["watch"], None, 3000, None)
     assert browse.read_query("t-shirt for ladies")[:2] == (["tshirt"], "women")
 
 
@@ -54,6 +55,26 @@ def test_a_keyword_finds_that_product_type_only():
 def test_gender_word_keeps_unisex_and_drops_the_other_gender():
     assert ids(index().search("white for men")) == ["2", "5", "6"]
     assert ids(index().search("kurta", gender="women", sort="price_low")) == ["3", "1"]
+
+
+@pytest.mark.parametrize(
+    ("query", "rating"),
+    [
+        ("kurta above 4 star", 4.0), ("kurta 4 star and above", 4.0), ("watch 4+ rating", 4.0), ("shoes rated 4+", 4.0),
+        ("rating above 4.5 bags", 4.5), ("4★ tops", 4.0), ("kurta 4 star se upar", 4.0), ("size 4 shoes", None),
+        ("kurta 4 pockets", None),
+    ],
+)
+def test_star_ratings_become_a_filter(query, rating):
+    wanted, _, _, min_rating = browse.read_query(query)
+    assert min_rating == rating
+    assert not {"star", "rating", "rated", "above", "se", "upar"} & set(wanted)
+
+
+def test_the_rating_filter_keeps_products_rated_that_high():
+    page = index().search("kurta 4.5 star and above")
+    assert ids(page) == ["3"] and page.understood == {"min_rating": 4.5}
+    assert ids(index().search("kurta", min_rating=4.5)) == ["3"]
 
 
 def test_every_word_must_match_else_the_closest_are_shown():
@@ -69,6 +90,19 @@ def test_price_limit_and_sorting():
     assert ids(index().search("kurta under 900", sort="price_high")) == ["1", "3"]
     assert ids(index().search("", sort="rating"))[0] == "3"
     assert index().search("", sort="price_low").items[0].price.selling == 499
+
+
+def test_a_colour_matches_the_product_not_its_brand():
+    docs = [
+        *catalogue(),
+        product_doc("8", article_type="Formal Shoes", gender="men", colour="Black", brand="Red Tape",
+                    title="Red Tape Men Black Formal Shoes"),
+        product_doc("9", article_type="Tops", gender="women", colour="Red", brand="Jealous 21",
+                    title="Jealous 21 Women Red Top"),
+    ]
+    assert ids(index(docs).search("red")) == ["1", "9"]
+    assert ids(index(docs).search("red tape")) == ["8"]
+    assert ids(index(docs).search("black")) == ["4", "8"]
 
 
 def test_aliases_find_what_shoppers_call_things():
@@ -157,3 +191,17 @@ def test_a_chat_follow_up_builds_on_the_last_checklist():
     brief = client.post("/api/brief/update", json=change).json()["brief"]
     assert brief["gender"] == "men" and brief["question"] is None
     assert [m["attribute"] for m in brief["must_haves"]] == ["type", "colour", "logo_visible"]
+
+
+def test_catalog_endpoint_filters_by_rating():
+    body = client_for().get("/api/catalog", params={"q": "kurta", "min_rating": 4.5}).json()
+    assert [item["id"] for item in body["items"]] == ["3"]
+    assert client_for().get("/api/catalog", params={"min_rating": 6}).status_code == 400
+
+
+def test_the_rating_chip_is_removed_with_a_change():
+    client = client_for(brief=lambda contents: brief_answer(min_rating=4))
+    made = client.post("/api/brief", json=CHAT | {"text": "white sneakers above 4 star", "ask": False}).json()
+    assert made["brief"]["min_rating"] == 4.0
+    change = {"session_id": made["session_id"], "change": {"type": "set_min_rating", "min_rating": None}}
+    assert client.post("/api/brief/update", json=change).json()["brief"]["min_rating"] is None

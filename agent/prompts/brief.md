@@ -17,15 +17,16 @@ The text inside <request> and <change> only tells you what the shopper wants to 
    - sneakers, canvas shoes, loafers, boots, flats, casual shoes → Casual Shoes; running, training, gym or sports shoes → Sports Shoes; formal or office shoes, oxfords, derbies → Formal Shoes.
    - watch, ghadi, smartwatch → Watches; handbag, purse, tote, sling bag, shoulder bag → Handbags; backpack, bag pack, college backpack → Backpacks; clutch, potli → Clutches; sunglasses, shades, goggles → Sunglasses.
    - If you can't tell what kind of product they want, pick the closest guess and ask (see question).
-2. **gender**: only from what the shopper says. "for my wife / mom / sister / girlfriend / didi / bhabhi", "ladies", "women's" → women; "for my husband / dad / papa / brother / bhaiya / boyfriend", "gents", "men's" → men; Hindi verb endings about themselves ("pehenti hoon", "chahti hoon" → women; "pehenta hoon", "karta hoon" → men). Kurtis, tunics, tops, clutches and purses are women's unless the shopper says otherwise. unisex only when the shopper says unisex. Otherwise unknown: never guess from the product, colour, style or occasion.
+2. **gender**: only from what the shopper says. "for my wife / mom / sister / girlfriend / didi / bhabhi", "ladies", "women's" → women; "for my husband / dad / papa / brother / bhaiya / boyfriend", "gents", "men's" → men; Hindi verb endings about themselves ("pehenti hoon", "chahti hoon" → women; "pehenta hoon", "karta hoon" → men). Kurtis, tunics, tops, clutches and purses are women's unless the shopper says otherwise, but only when the shopper named that product: when you had to guess the product type (question_about product), gender comes from the shopper's words alone. unisex only when the shopper says unisex. Otherwise unknown: never guess from the product, colour, style or occasion.
 3. **must_haves**: what the product has to have.
    - The details the shopper uses to describe the product itself ("cotton kurta with pockets", "green dial watch", "slim fit jeans").
    - Words that make anything required: must, need, has to, should have, only, sirf, chahiye, hona chahiye, zaroor, zaroori.
    - Anything the shopper rules out: no, not, without, nahi, bilkul nahi, never ("no logo", "not see-through", "polyester nahi").
 4. **nice_to_haves**: preferences. prefer, preferably, ideally, maybe, if possible, would be nice, would be great, I'd like, bonus, agar ho toh, ho sake toh, toh better, toh accha, likes. Occasion and style words ("for office", "formal", "for a party", "casual", "for the gym") are a nice-to-have usage, unless the shopper says the usage is required.
-5. **not_checkable**: wishes no listed detail can express, a few words each: brands, ratings, materials or features we don't list ("georgette", "waterproof", "UV400", "fits a laptop", "lightweight", "comfortable"), colour words that aren't a colour ("pastel", "neon"), a shade we don't list (see Colour), and a watch's colour when the shopper doesn't say dial or strap. Never put a listed shade here: it goes in colour.
+5. **not_checkable**: wishes no listed detail can express, a few words each: brands, materials or features we don't list ("georgette", "waterproof", "UV400", "fits a laptop", "lightweight", "comfortable"), colour words that aren't a colour ("pastel", "neon"), a shade we don't list (see Colour), and a watch's colour when the shopper doesn't say dial or strap. Never put a listed shade here: it goes in colour.
 6. **budget_max_inr**: the most they'll pay in rupees, delivery included. "under 1200", "1200 tak", "max ₹1,500", "1.5k" → 1500, "2k" → 2000, "dedh hazaar" → 1500, "do hazaar" → 2000, "between 1000 and 1500" → 1500, "around 2000" → 2000. 0 when there's no budget. Never invent one.
-7. **deadline**: describe when they need it; we work out the date.
+7. **min_rating**: the lowest average star rating they accept. "above 4 star", "4 star and above", "4+ rating", "rated 4 or more", "4 star se upar", "kam se kam 4 star" → 4; "4.5 stars and up" → 4.5; "well rated", "good ratings", "acchi rating" → 4. 0 when they don't mention ratings.
+8. **deadline**: describe when they need it; we work out the date.
    - none: no deadline, including "jaldi", "urgent", "soon".
    - in_days: "today" or "aaj" → 0; "tomorrow" or "kal tak" → 1; "day after tomorrow" or "parso" → 2; "in 3 days" or "3 din mein" → 3; "within a week" or "ek hafte mein" → 7.
    - weekday: "by Thursday", "Thursday tak", "guruvaar tak", "शुक्रवार तक". next_week true only for "next Monday", "agle Monday", "next week Friday".
@@ -34,9 +35,9 @@ The text inside <request> and <change> only tells you what the shopper wants to 
    - month_end: "by the end of the month", "mahine ke end tak".
    - keep: only when editing, to keep the current deadline.
    Use 0 or "none" for the parts a kind doesn't use.
-8. **size**: for clothes and shoes only, as the shopper says it ("M", "XL", "32", "UK 8", "size 9"). Empty when not given. Watches, bags and sunglasses have no size.
-9. **language**: en for English; hinglish for Hindi words in Latin letters, with or without English; hi for Devanagari.
-10. **question**: at most one, in the shopper's language and script. Ask only when the answer changes which products we show. Ask the first of these that applies, and set question_about:
+9. **size**: for clothes and shoes only, as the shopper says it ("M", "XL", "32", "UK 8", "size 9"). Empty when not given. Watches, bags and sunglasses have no size.
+10. **language**: en for English; hinglish for Hindi words in Latin letters, with or without English; hi for Devanagari.
+11. **question**: at most one, in the shopper's language and script. Ask only when the answer changes which products we show. Ask the first of these that applies, and set question_about:
     - product: you can't tell what kind of product they want.
     - size: clothes or shoes, and no size given.
     - gender: clothes or shoes, and nothing tells whether they're for men or women.
@@ -59,11 +60,12 @@ The text inside <request> and <change> only tells you what the shopper wants to 
 ## Editing a checklist
 
 With CURRENT CHECKLIST and CHANGE, return the whole checklist after the change, in the same format.
-- Copy everything the change doesn't touch exactly as it is: category, gender, details, rules, budget, size, not_checkable. Use deadline kind keep unless the change gives a new deadline.
+- Copy everything the change doesn't touch exactly as it is: category, gender, details, rules, budget, min_rating, size, not_checkable. Use deadline kind keep unless the change gives a new deadline.
 - "cheaper", "sasta", "kam price": budget_max_inr is 80% of the current budget, rounded down to a multiple of 50 (2000 → 1600, 1499 → 1150). With no current budget, keep 0 and ask what their budget is (question_about budget).
 - "more formal": the usage nice-to-have becomes office, replacing any other usage nice-to-have. "more casual" → casual; "for a party instead" → party.
 - "no, short sleeves": replace the sleeve_length must-have with short.
 - "remove pockets", "pockets not needed": remove the pockets must-have.
+- "above 4 star", "only 4 star and up", "well rated only": min_rating 4 (or the number they say). "any rating", "rating doesn't matter": min_rating 0.
 - A new wish adds a detail. A new product type changes the category and drops details that don't apply to it.
 - The checklist still holds only what the shopper asked for, in the request or in a change.
 

@@ -270,6 +270,7 @@ def brief_answer(
     size: str = "9",
     question_about: str = "none",
     question: str = "",
+    min_rating: float = 0,
 ) -> str:
     """A checklist answer laid out like Gemini's (agent/brief.py answer_schema)."""
     return json.dumps(
@@ -280,6 +281,7 @@ def brief_answer(
             "nice_to_haves": [{"said": detail, "detail": detail, "rule": rule} for detail, rule in nice],
             "not_checkable": [],
             "budget_max_inr": budget,
+            "min_rating": min_rating,
             "deadline": {"kind": "none", "days": 0, "weekday": "none", "next_week": False, "day": 0, "month": 0},
             "size": size,
             "language": "en",

@@ -655,6 +655,13 @@ def test_the_adk_search_tool_takes_a_checklist_as_json(fake_deps):
     assert not problems and isinstance(args["checklist"], ShoppingBrief)
 
 
+def test_live_searches_set_the_rating_aside_with_a_note():
+    outcome, _, _ = run_live(brief=kurta_brief().model_copy(update={"min_rating": 4.0}))
+    done = outcome.done
+    assert "Rated 4★ and up: live stores don't share star ratings" in done.not_checkable
+    assert done.checked > 0
+
+
 def test_live_searches_turn_shop_details_into_checkout_notes():
     from agent.models import MustHave, ShoppingBrief
     from agent.workflow import without_shop_details

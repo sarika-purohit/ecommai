@@ -314,6 +314,7 @@ function newBrief(input: BriefInput, category: string): ShoppingBrief {
       /\b(office|work|formal)\b/i.test(text) && category !== "Watches" && category !== SHOES ? [{ attribute: "usage", value: "office" }] : [],
     rules_applied: [],
     budget_max_inr: budgetFrom(text),
+    min_rating: null,
     deadline_date: deadlineFrom(text),
     pincode: input.pincode,
     size: null,
@@ -470,6 +471,8 @@ function applyChange(session: MockSession, change: BriefChange): MockSession {
       return { ...session, brief: { ...brief, size: change.size, missing: brief.missing.filter((m) => m !== "size") } };
     case "set_source":
       return { ...session, source: change.source };
+    case "set_min_rating":
+      return { ...session, brief: { ...brief, min_rating: change.min_rating } };
     case "answer":
       return answerQuestion(session, change.answer);
     case "text":
@@ -1252,6 +1255,7 @@ export async function getCatalog(query: CatalogQuery): Promise<CatalogPage> {
   const wanted = words.filter((word) => !MOCK_GENDERS[word] && !["for", "with", "and", "a", "the"].includes(word)).map(stemOf);
   const matching = [...KURTAS, ...WATCHES].filter((product) => {
     if (gender && product.gender !== gender && product.gender !== "unisex") return false;
+    if (query.min_rating && (product.rating_avg ?? 0) < query.min_rating) return false;
     const own = `${product.title} ${product.brand ?? ""} ${product.articleType} ${product.baseColour ?? ""}`.toLowerCase();
     const stems = new Set((own.match(/[a-z0-9]+/g) ?? []).map(stemOf));
     return wanted.every((word) => stems.has(word));

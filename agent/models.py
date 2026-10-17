@@ -54,6 +54,7 @@ class ShoppingBrief(BaseModel):
     nice_to_haves: list[NiceToHave] = Field(default_factory=list)
     rules_applied: list[str] = Field(default_factory=list)
     budget_max_inr: int | None = Field(default=None, gt=0, description="Includes delivery")
+    min_rating: float | None = Field(default=None, ge=1, le=5, description="Lowest average star rating accepted")
     deadline_date: date | None = None
     pincode: str | None = Field(default=None, pattern=r"^[1-9][0-9]{5}$")
     size: str | None = None

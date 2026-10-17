@@ -456,6 +456,7 @@ def catalog(
     category: str | None = Query(default=None, max_length=60),
     gender: browse.GenderFilter | None = None,
     max_price: int | None = Query(default=None, gt=0),
+    min_rating: float | None = Query(default=None, ge=1, le=5),
     sort: browse.Sort = "relevance",
     page: int = Query(default=1, ge=1, le=500),
     page_size: int = Query(default=browse.PAGE_SIZE, ge=1, le=browse.MAX_PAGE_SIZE),
@@ -463,7 +464,8 @@ def catalog(
     backend: Backend = Depends(backend_of),
 ):
     return catalog_of(backend).search(
-        q, category=category, gender=gender, max_price=max_price, sort=sort, page=page, page_size=page_size
+        q, category=category, gender=gender, max_price=max_price, min_rating=min_rating, sort=sort, page=page,
+        page_size=page_size,
     )
 
 
