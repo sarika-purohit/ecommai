@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import { EditableTag } from "@/components/EditableTag";
 import { CameraIcon, CloseIcon, HistoryIcon, SendIcon, SparkleIcon } from "@/components/icons";
+import { StatusIcon } from "@/components/proof/TickList";
 import { SourceChoice } from "@/components/SourceChoice";
+import { productHref } from "@/components/store/ProductTile";
 import { Tag } from "@/components/Tag";
 import {
   aiProgressStore,
@@ -28,11 +30,11 @@ import {
 import { listChats } from "@/lib/api";
 import { addDays, dayInIndia, parseIsoDate, rupees, shortDay } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
-import { categoryLabel, mustHaveLabel, niceToHaveChip, niceToHaveLabel } from "@/lib/labels";
+import { categoryLabel, mustHaveLabel, niceToHaveChip, niceToHaveLabel, tickLabel } from "@/lib/labels";
 import { resultsStore, sessionStore, sourceStore } from "@/lib/session";
 import { useIsClient } from "@/lib/stored";
 import { strings } from "@/lib/strings";
-import type { BriefChange, ChatSummary, ShoppingBrief } from "@/lib/types";
+import type { BriefChange, ChatSummary, ResultCard, ShoppingBrief } from "@/lib/types";
 
 const text = strings.chat;
 
@@ -247,10 +249,8 @@ function ChatPanel() {
                 </ol>
               )}
               {progress ? <Progress progress={progress} /> : null}
-              {hasResults && !busy ? (
-                <Link href="/results" className="link self-start" onClick={() => chatOpenStore.set(false)}>
-                  {text.seeDetails}
-                </Link>
+              {hasResults && results && !busy ? (
+                <ChatMatches cards={results.done.matches} brief={results.brief} onLeave={() => chatOpenStore.set(false)} />
               ) : null}
               <div ref={endRef} />
             </div>
@@ -386,6 +386,78 @@ function Message({ message, latest, disabled, onPick }: MessageProps) {
         </ul>
       ) : null}
     </li>
+  );
+}
+
+/** How many matches the chat shows itself; the rest are one tap away on the results page. */
+const CHAT_CARDS = 6;
+
+/** The best matches as a swipeable row of cards, then the way to all of them with their proof. */
+function ChatMatches({ cards, brief, onLeave }: { cards: ResultCard[]; brief: ShoppingBrief; onLeave: () => void }) {
+  const shown = cards.slice(0, CHAT_CARDS);
+  const leaveOnPhone = () => {
+    if (!window.matchMedia(SIDE_PANEL_QUERY).matches) onLeave();
+  };
+  return (
+    <div className="flex flex-col gap-2.5">
+      {shown.length > 0 ? (
+        <div
+          role="region"
+          aria-label={text.matchesLabel}
+          tabIndex={0}
+          className="-mx-4 snap-x snap-mandatory overflow-x-auto px-4 pb-1 scroll-px-4 focus-visible:outline-2 focus-visible:outline-indigo"
+        >
+          <ul className="flex gap-2.5">
+            {shown.map((card) => (
+              <li key={card.product_id} className="w-[9.5rem] flex-none snap-start">
+                <ChatCard card={card} brief={brief} onOpen={leaveOnPhone} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <Link href="/results" className="btn btn-secondary btn-small self-start" onClick={onLeave}>
+        {cards.length > 0 ? text.showMore(cards.length) : text.seeDetails}
+      </Link>
+    </div>
+  );
+}
+
+function ChatCard({ card, brief, onOpen }: { card: ResultCard; brief: ShoppingBrief; onOpen: () => void }) {
+  const photo = card.thumb ?? card.photo;
+  const passed = card.ticks.filter((tick) => tick.status === "pass").length;
+  const all = passed === card.ticks.length;
+  const missed = card.ticks.filter((tick) => tick.status !== "pass").map((tick) => tickLabel(tick, brief));
+  return (
+    <article className="relative flex h-full flex-col overflow-hidden rounded-2xl bg-card ring-1 ring-line transition hover:ring-2 hover:ring-indigo">
+      <div className="relative aspect-[3/4] bg-white">
+        {photo ? (
+          <Image src={photo} alt="" fill unoptimized sizes="152px" className="object-contain p-1.5" />
+        ) : (
+          <span className="block h-full bg-wash" />
+        )}
+      </div>
+      <div className="flex flex-1 flex-col p-2.5">
+        {card.brand ? <p className="eyebrow truncate text-[0.75rem] leading-tight">{card.brand}</p> : null}
+        <h3 className="mt-0.5 line-clamp-2 text-[0.9375rem] font-semibold leading-snug">
+          <Link href={productHref(card.product_id)} className="after:absolute after:inset-0 focus:outline-none" onClick={onOpen}>
+            {card.title}
+          </Link>
+        </h3>
+        <p className="display mt-1 text-[1.125rem] tabular-nums">{rupees(card.total_price)}</p>
+        {card.ticks.length > 0 ? (
+          <p
+            className="mt-auto flex items-center gap-1 pt-1 text-[0.875rem] font-semibold"
+            title={missed.length > 0 ? missed.join(", ") : undefined}
+          >
+            <span className="verdict-mini" data-state={all ? "pass" : "unclear"} aria-hidden="true">
+              <StatusIcon status={all ? "pass" : "unclear"} className="size-3" />
+            </span>
+            {all ? text.matchesAll : text.ticksPassed(passed, card.ticks.length)}
+          </p>
+        ) : null}
+      </div>
+    </article>
   );
 }
 

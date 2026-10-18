@@ -2,7 +2,7 @@
 
 import { ApiError, createBrief, getCatalog, isAbort, openChat, saveChatMessages, searchProducts, updateBrief } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
-import { mustHaveLabel, rememberedLabels, tradeoffLabel } from "@/lib/labels";
+import { categoryLabel, mustHaveLabel, rememberedLabels, tradeoffLabel } from "@/lib/labels";
 import { rupees, shortDayInIndia } from "@/lib/format";
 import {
   addWeb,
@@ -475,7 +475,7 @@ export function showStore() {
   chatStore.set({ ...chat(), showResults: false });
 }
 
-/** `quiet`: a search on reopening a chat, which adds no "Checked N…" message (errors are still said). */
+/** `quiet`: a search on reopening a chat, which adds no "N … that match" message (errors are still said). */
 async function runSearch(quiet = false): Promise<void> {
   const session = sessionStore.get();
   if (!session) {
@@ -541,9 +541,13 @@ function finish(session: SearchSession, done: DoneEvent, web: WebEvent | null, q
   const notes = done.not_checkable.length > 0 ? text.notChecked(done.not_checkable) : "";
   say({
     role: "ai",
-    text: text.found(done.checked, done.passed) + almost + notes + (tradeoffs.length > 0 ? ` ${text.tradeoffs}` : ""),
+    text: text.found(done.passed, lowerFirst(categoryLabel(session.brief))) + almost + notes + (tradeoffs.length > 0 ? ` ${text.tradeoffs}` : ""),
     tradeoffs: tradeoffs.length > 0 ? tradeoffs : undefined,
   });
+}
+
+function lowerFirst(words: string): string {
+  return words.charAt(0).toLowerCase() + words.slice(1);
 }
 
 function tradeoffButton(tradeoff: Tradeoff, session: SearchSession) {

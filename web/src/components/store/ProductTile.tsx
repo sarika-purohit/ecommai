@@ -12,7 +12,7 @@ import type { CatalogItem, LookSuggestion, Price, ResultCard, ShoppingBrief } fr
 const text = strings.store;
 const MAX_TICKS = 3;
 
-function productHref(id: string): string {
+export function productHref(id: string): string {
   return `/product/${encodeURIComponent(id)}`;
 }
 
@@ -22,6 +22,15 @@ export function ProductTile({ item }: { item: CatalogItem }) {
     <TileFrame href={productHref(item.id)} photo={item.thumb ?? item.photo} title={item.title} brand={item.brand}>
       <PriceLine price={item.price} />
       <Rating rating={item.rating_avg} count={item.rating_count} />
+    </TileFrame>
+  );
+}
+
+/** A product that goes with a recent order: photo, name and price only. */
+export function OrderTile({ item }: { item: CatalogItem }) {
+  return (
+    <TileFrame href={productHref(item.id)} photo={item.thumb ?? item.photo} title={item.title} brand={item.brand}>
+      <PriceLine price={item.price} />
     </TileFrame>
   );
 }

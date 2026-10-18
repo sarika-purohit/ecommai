@@ -73,7 +73,7 @@ export function ResultCardView({ card, brief, sessionId }: ResultCardViewProps) 
       ) : null}
 
       <div className="mt-4">
-        <TickList ticks={card.ticks} brief={brief} photo={card.photo ?? card.thumb} live={live} store={card.store} />
+        <TickList ticks={card.ticks} brief={brief} live={live} store={card.store} />
       </div>
       {card.reason ? <p className="mt-3 text-base leading-snug text-ink-soft">{card.reason}</p> : null}
 

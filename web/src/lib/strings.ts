@@ -202,16 +202,22 @@ const en = {
     updating: "Updating…",
     checking: (checked: number, total: number, passed: number) =>
       total === 0 ? "Finding products…" : `Checking ${checked} of ${total} · ${passed} have everything`,
-    found: (checked: number, passed: number) =>
+    found: (passed: number, what: string) =>
       passed === 0
-        ? `Nothing has everything you asked for (checked ${checked}).`
-        : `${passed === 1 ? "1 product has" : `${passed} products have`} everything you asked for (checked ${checked}). They’re on the page now.`,
+        ? "Nothing has everything you asked for."
+        : passed === 1
+          ? `1 match in ${what}.`
+          : `${passed} ${what} that match.`,
     almost: (count: number) => (count === 1 ? " 1 more might, but I couldn’t confirm it." : ` ${count} more might, but I couldn’t confirm them.`),
     tradeoffs: "Tap one to relax it:",
     removed: (label: string) => `Without “${label}”.`,
     relaxed: (label: string) => label,
     sourceLabel: "Search in",
     seeDetails: "Full results and proof",
+    matchesLabel: "Products that match",
+    showMore: (count: number) => `Show all ${count} with proof`,
+    matchesAll: "Matches all",
+    ticksPassed: (passed: number, total: number) => `${passed} of ${total} match`,
     opening: "Opening your chat…",
     welcomeBack: (date: string) => `Welcome back. This chat is from ${date}, so I’ve checked prices again.`,
     welcomeBackPlain: (date: string) => `Welcome back. This chat is from ${date}.`,
@@ -236,7 +242,7 @@ const en = {
       catalog: "Okay, I’ll check the demo catalogue.",
     } as Record<"live" | "catalog", string>,
     liveNeedsType: " Live stores need a product type, so this list is from our demo catalogue.",
-    notChecked: (notes: string[]) => ` Not checked: ${notes.join("; ")}.`,
+    notChecked: (notes: string[]) => ` I couldn’t check: ${notes.join("; ")}.`,
     whatProduct: (kept: string[]) =>
       `What kind of product are you looking for? Pick one or type it.${kept.length > 0 ? ` I’ll keep “${kept.join(", ")}”.` : ""}`,
     picksLabel: "Product types",
@@ -413,9 +419,6 @@ const en = {
 
   proof: {
     tick: (label: string, status: string) => `${label}: ${status}`,
-    photoAlt: (label: string) => `Product photo with the area for “${label}” marked`,
-    photoAltPlain: "Product photo",
-    noBox: "We couldn’t mark the exact spot, so here’s the whole photo.",
     fromPhoto: "Seen in the photo",
     fromListing: "From the product listing",
     fromReviews: "From reviews",
@@ -537,11 +540,7 @@ const en = {
   },
 
   orders: {
-    railTitle: "Goes with your recent demo orders",
-    railHint: "Styling suggestions by Gemini from our sample catalogue. Demo orders only: no payment, nothing delivered.",
-    goesWith: (title: string, day: string, seeded: boolean) =>
-      `Goes with your ${title} · Demo order · ${day}${seeded ? " · seeded for this demo" : ""}`,
-    ideas: (list: string) => `Ideas, not sold here: ${list}`,
+    railTitle: "Goes with your recent orders",
     placeFailed: "We couldn’t place your demo order.",
     profileTitle: "Your demo orders",
     profileHint: "Orders you placed in the demo store. No payment was taken and nothing was delivered.",

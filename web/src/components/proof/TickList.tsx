@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { useId, useState } from "react";
 import { CheckIcon, ChevronDownIcon, CloseIcon, QuestionIcon } from "@/components/icons";
 import { tickLabel } from "@/lib/labels";
 import { strings } from "@/lib/strings";
-import type { BoundingBox, Evidence, ShoppingBrief, Status, Tick } from "@/lib/types";
+import type { Evidence, ShoppingBrief, Status, Tick } from "@/lib/types";
 
 const text = strings.proof;
 const SHOP_DETAILS = new Set(["cod", "returnable", "exchange"]);
@@ -20,8 +19,6 @@ interface TickListProps {
   ticks: Tick[];
   /** The checklist the ticks belong to, so they read the same as its chips. */
   brief: ShoppingBrief | null;
-  /** The photo the careful check looked at (gemini/ size, or the store's photo); box_2d is relative to it. */
-  photo: string | null;
   /** A live store's product: proof comes from the store's photo and description, never demo reviews. */
   live?: boolean;
   store?: string | null;
@@ -30,7 +27,7 @@ interface TickListProps {
 }
 
 /** The tick-list: one tag per must-have. Tapping one opens its proof underneath. */
-export function TickList({ ticks, brief, photo, live = false, store = null, fromWeb = false }: TickListProps) {
+export function TickList({ ticks, brief, live = false, store = null, fromWeb = false }: TickListProps) {
   const [open, setOpen] = useState<string | null>(null);
   const proofId = useId();
   const openTick = ticks.find((tick) => tick.must_have_id === open) ?? null;
@@ -74,7 +71,6 @@ export function TickList({ ticks, brief, photo, live = false, store = null, from
             tick={openTick}
             label={tickLabel(openTick, brief)}
             attribute={attributeOf(openTick)}
-            photo={photo}
             live={live}
             store={store}
             fromWeb={fromWeb}
@@ -121,10 +117,9 @@ interface ProofProps extends Origin {
   tick: Tick;
   label: string;
   attribute: string | null;
-  photo: string | null;
 }
 
-function Proof({ tick, label, attribute, photo, live, store, fromWeb }: ProofProps) {
+function Proof({ tick, label, attribute, live, store, fromWeb }: ProofProps) {
   const { evidence } = tick;
   const source = evidence ? sourceLine(evidence, attribute, { live, store, fromWeb }) : null;
   return (
@@ -138,7 +133,6 @@ function Proof({ tick, label, attribute, photo, live, store, fromWeb }: ProofPro
       ) : (
         <>
           {evidence.note ? <p className="mt-2 leading-snug">{evidence.note}</p> : null}
-          {evidence.type === "image" ? <PhotoProof photo={photo} box={validBox(evidence.box_2d)} label={label} /> : null}
           {evidence.type === "reviews" ? <ReviewProof evidence={evidence} demo={!live} /> : null}
           {evidence.type !== "reviews" && evidence.quote ? <Quote>{evidence.quote}</Quote> : null}
           {source ? <p className="mt-3 text-base text-ink-soft">{source}</p> : null}
@@ -155,41 +149,6 @@ export function StatusPill({ status }: { status: Status }) {
       <StatusIcon status={status} className="size-4" />
       {strings.status[status]}
     </span>
-  );
-}
-
-function validBox(box: BoundingBox | null): BoundingBox | null {
-  if (!box || box.length !== 4 || box.some((v) => typeof v !== "number" || v < 0 || v > 1000)) return null;
-  const [ymin, xmin, ymax, xmax] = box;
-  return ymin < ymax && xmin < xmax ? box : null;
-}
-
-/** The careful check's photo, with its box (0-1000 on each side) scaled onto the photo as shown. */
-function PhotoProof({ photo, box, label }: { photo: string | null; box: BoundingBox | null; label: string }) {
-  if (!photo) return null;
-  const spot = box
-    ? {
-        top: `${box[0] / 10}%`,
-        left: `${box[1] / 10}%`,
-        height: `${(box[2] - box[0]) / 10}%`,
-        width: `${(box[3] - box[1]) / 10}%`,
-      }
-    : null;
-  return (
-    <figure className="mt-3">
-      <div className="proof-frame mx-auto w-full max-w-[17rem]">
-        <Image
-          src={photo}
-          alt={spot ? text.photoAlt(label) : text.photoAltPlain}
-          width={750}
-          height={1000}
-          unoptimized
-          className="block h-auto w-full"
-        />
-        {spot ? <span className="proof-spot" style={spot} aria-hidden="true" /> : null}
-      </div>
-      {spot ? null : <figcaption className="mx-auto mt-2 max-w-[17rem] text-base text-ink-soft">{text.noBox}</figcaption>}
-    </figure>
   );
 }
 

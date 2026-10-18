@@ -129,7 +129,7 @@ function CheckedPage({ result, brief }: { result: WebResult; brief: ShoppingBrie
         </div>
       </div>
       <div className="mt-3">
-        <TickList ticks={result.ticks} brief={brief} photo={null} fromWeb />
+        <TickList ticks={result.ticks} brief={brief} fromWeb />
       </div>
       <a href={result.url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-small mt-3 w-full">
         {text.openOn(result.site)}

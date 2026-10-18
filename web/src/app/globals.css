@@ -566,24 +566,6 @@ html[data-returning] [data-signin-screen] {
   }
 
   /* Photo proof: everything outside the marked spot dims, so the eye lands on the evidence. */
-  .proof-frame {
-    position: relative;
-    overflow: hidden;
-    border-radius: 1rem;
-    background: #ffffff;
-    box-shadow: 0 0 0 1px var(--color-line);
-  }
-
-  .proof-spot {
-    position: absolute;
-    border-radius: 0.5rem;
-    outline: 3px solid var(--color-marigold);
-    box-shadow:
-      inset 0 0 0 1px rgb(24 29 69 / 0.55),
-      0 0 0 100vmax rgb(24 29 69 / 0.42);
-    animation: spotlight 520ms ease-out both;
-  }
-
   .tag-chevron {
     transition: transform 150ms ease;
   }
@@ -653,15 +635,6 @@ html[data-returning] [data-signin-screen] {
   to {
     opacity: 1;
     transform: none;
-  }
-}
-
-@keyframes spotlight {
-  from {
-    outline-color: transparent;
-    box-shadow:
-      inset 0 0 0 1px transparent,
-      0 0 0 100vmax rgb(24 29 69 / 0);
   }
 }
 

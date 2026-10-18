@@ -224,7 +224,7 @@ function Product({ product, sessionId, briefs }: { product: ProductDetails; sess
 
       {ticks.length > 0 ? (
         <Section title={text.checklist} hint={strings.results.proofHint}>
-          <TickList ticks={ticks} brief={tickBrief} photo={photo} live={live} store={store} />
+          <TickList ticks={ticks} brief={tickBrief} live={live} store={store} />
         </Section>
       ) : null}
 
