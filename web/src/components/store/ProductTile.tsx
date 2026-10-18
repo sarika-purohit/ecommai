@@ -7,7 +7,7 @@ import { StatusIcon } from "@/components/proof/TickList";
 import { rupees } from "@/lib/format";
 import { tickLabel } from "@/lib/labels";
 import { strings } from "@/lib/strings";
-import type { CatalogItem, Price, ResultCard, ShoppingBrief } from "@/lib/types";
+import type { CatalogItem, LookSuggestion, Price, ResultCard, ShoppingBrief } from "@/lib/types";
 
 const text = strings.store;
 const MAX_TICKS = 3;
@@ -59,6 +59,21 @@ export function AiTile({ card, brief }: { card: ResultCard; brief: ShoppingBrief
         </ul>
       ) : null}
       <Rating rating={card.rating_avg} count={card.rating_count} />
+    </TileFrame>
+  );
+}
+
+/** A product suggested to complete a look: the store tile plus its match and Gemini's styling note. */
+export function LookTile({ suggestion }: { suggestion: LookSuggestion }) {
+  const { product } = suggestion;
+  const look = strings.look;
+  return (
+    <TileFrame href={productHref(product.id)} photo={product.thumb ?? product.photo} title={product.title} brand={product.brand}>
+      <PriceLine price={product.price} />
+      <p className="mt-1 text-[0.9375rem] font-semibold tabular-nums">
+        {suggestion.match === null ? <span className="text-ink-soft">{look.unscored}</span> : look.match(suggestion.match)}
+      </p>
+      {suggestion.reason ? <p className="mt-0.5 line-clamp-2 text-[0.875rem] leading-snug text-ink-soft">{suggestion.reason}</p> : null}
     </TileFrame>
   );
 }

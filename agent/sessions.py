@@ -1,10 +1,13 @@
 """Saved state: shoppers and searches in Firestore (PLAN.md appendix F), uploaded photos in Cloud Storage.
 
-users/{uid}       name, email, pincode, language, rules, taste, likes, dislikes
+users/{uid}       name, email, pincode, language, rules, taste, likes, dislikes, orders (demo-store orders, at most 50,
+                  none older than a year)
 sessions/{id}     user_id, brief, the saved rules it was made with, rules switched off for it, history, results,
                   feedback, and the shopper's photo until the search has embedded it; source ('live' Shopify stores
                   or our demo 'catalog') and, for live searches, only the ids of the products shown (Shopify's
                   terms don't allow caching its search results, so product pages and checkout fetch them fresh)
+chats/{id}        user_id, title, timestamps, messages, pending and one entry per product talked about, each with its
+                  readable filters and the session it searches with (agent/chats.py)
 uploads/{uid}/... the shopper's photos, in a bucket that isn't public; deleted once the search has used them
 
 Name and email are kept only in users/{uid}, and nothing here logs them or the uid.
@@ -14,7 +17,7 @@ import os
 import re
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import cache
 from typing import Any, Literal
 
@@ -23,12 +26,24 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from google.cloud.firestore_v1.vector import Vector
 from pydantic import BaseModel, Field
 
+from agent.chats import (
+    KEEP_CHATS,
+    KEEP_DAYS,
+    ChatDoc,
+    ChatMessage,
+    ChatProduct,
+    ChatTimestamps,
+    ProductTimestamps,
+    title_of,
+)
 from agent.learn import TasteProfile, TasteVector
 from agent.models import MustHave, Product, ShoppingBrief
+from agent.purchases import Order
 from agent.verify import PRODUCT_FIELDS
 
 USERS = "users"
 SESSIONS = "sessions"
+CHATS = "chats"
 PRODUCTS = "products"
 UPLOADS = "uploads"
 VECTOR_FIELD = "embedding"
@@ -46,6 +61,7 @@ class UserDoc(BaseModel):
     taste: dict[str, TasteVector] = Field(default_factory=dict)
     likes: list[str] = Field(default_factory=list)
     dislikes: list[str] = Field(default_factory=list)
+    orders: list[Order] = Field(default_factory=list, description="Demo-store orders, oldest first")
 
 
 class SessionDoc(BaseModel):
@@ -116,6 +132,8 @@ class Store:
             data["taste"] = _taste_to_firestore(data["taste"])
         if "rules" in data:
             data["rules"] = [rule.model_dump(mode="json") for rule in data["rules"]]
+        if "orders" in data:
+            data["orders"] = [order.model_dump(mode="python") for order in data["orders"]]
         self.db.collection(USERS).document(uid).set(data, merge=list(data))
 
     def remember_profile(self, uid: str, name: str, email: str, current: UserDoc) -> None:
@@ -123,14 +141,12 @@ class Store:
             self.update_user(uid, {"name": name, "email": email})
 
     def delete_user(self, uid: str) -> int:
-        """Delete the shopper, every search they made and every photo they uploaded. Returns sessions deleted."""
+        """Delete the shopper, every search and chat they made and every photo they uploaded. Returns sessions deleted."""
         query = self.db.collection(SESSIONS).where(filter=FieldFilter("user_id", "==", uid))
         refs = [snapshot.reference for snapshot in query.stream()]
-        for start in range(0, len(refs), DELETE_BATCH):
-            batch = self.db.batch()
-            for ref in refs[start : start + DELETE_BATCH]:
-                batch.delete(ref)
-            batch.commit()
+        chats = self.db.collection(CHATS).where(filter=FieldFilter("user_id", "==", uid))
+        self._delete_refs([snapshot.reference for snapshot in chats.stream()])
+        self._delete_refs(refs)
         self.db.collection(USERS).document(uid).delete()
         if self.bucket is not None:
             try:
@@ -140,11 +156,19 @@ class Store:
                 pass
         return len(refs)
 
+    def _delete_refs(self, refs: list[Any]) -> None:
+        for start in range(0, len(refs), DELETE_BATCH):
+            batch = self.db.batch()
+            for ref in refs[start : start + DELETE_BATCH]:
+                batch.delete(ref)
+            batch.commit()
+
     # ---------- Searches ----------
 
     def new_session(
         self, uid: str, brief: ShoppingBrief, *, query_text: str, rules: list[MustHave], photo: str | None,
-        source: Literal["live", "catalog"] = "catalog",
+        source: Literal["live", "catalog"] = "catalog", disabled_rules: Sequence[str] = (),
+        history: Sequence[dict] = (),
     ) -> SessionDoc:
         moment = now_utc()
         session = SessionDoc(
@@ -155,7 +179,9 @@ class Store:
             query_text=query_text,
             brief=brief,
             rules=rules,
+            disabled_rules=list(disabled_rules),
             photo=photo,
+            history=list(history),
             source=source,
         )
         self.save_session(session)
@@ -183,6 +209,100 @@ class Store:
         session.updated_at = now_utc()
         data = _session_fields(session, [*names, "updated_at"])
         self.db.collection(SESSIONS).document(session.id).set(data, merge=list(data))
+
+    # ---------- Chats ----------
+
+    def chat(self, chat_id: str) -> ChatDoc | None:
+        """The chat whoever it belongs to (the caller checks user_id), or None when there is none."""
+        snapshot = self.db.collection(CHATS).document(chat_id).get()
+        return self._chat_of(snapshot) if snapshot.exists else None
+
+    @staticmethod
+    def _chat_of(snapshot: Any) -> ChatDoc:
+        return ChatDoc.model_validate({**(snapshot.to_dict() or {}), "chat_id": snapshot.id})
+
+    def chats(self, uid: str) -> list[ChatDoc]:
+        """The shopper's chats, newest first. Chats not changed for KEEP_DAYS, or past the newest KEEP_CHATS, are deleted.
+
+        Sorted here rather than by Firestore, so the query needs no composite index.
+        """
+        query = self.db.collection(CHATS).where(filter=FieldFilter("user_id", "==", uid))
+        found = sorted((self._chat_of(snapshot) for snapshot in query.stream()), key=lambda c: c.timestamps.updated_at, reverse=True)
+        oldest = now_utc() - timedelta(days=KEEP_DAYS)
+        kept = [chat for chat in found[:KEEP_CHATS] if chat.timestamps.updated_at >= oldest]
+        for chat in found[len(kept):]:
+            self.db.collection(CHATS).document(chat.chat_id).delete()
+        return kept
+
+    def past_products(self, uid: str, name: str, *, except_chat: str | None = None) -> list[ChatProduct]:
+        """The shopper's saved entries for this product in their other chats, for memory mode. Reads only."""
+        query = self.db.collection(CHATS).where(filter=FieldFilter("user_id", "==", uid))
+        found = (self._chat_of(snapshot) for snapshot in query.stream())
+        return [p for chat in found if chat.chat_id != except_chat for p in chat.products if p.product == name]
+
+    def _fresh_chat(self, uid: str, chat_id: str, moment: datetime) -> ChatDoc:
+        return ChatDoc(
+            chat_id=chat_id, user_id=uid, timestamps=ChatTimestamps(created_at=moment, updated_at=moment, last_opened_at=moment)
+        )
+
+    def _write_chat(self, chat: ChatDoc, current: ChatDoc | None, names: Sequence[str]) -> None:
+        """A new chat is written whole; an old one gets just these fields, so saves of messages and products don't clash."""
+        ref = self.db.collection(CHATS).document(chat.chat_id)
+        data = chat.model_dump(exclude={"chat_id"})
+        data["messages"] = [message.model_dump(exclude_none=True) for message in chat.messages]
+        if current is None:
+            ref.set(data)
+        else:
+            ref.set(data, merge=list(names))
+
+    def create_chat(self, uid: str, chat_id: str) -> ChatDoc:
+        chat = self._fresh_chat(uid, chat_id, now_utc())
+        self._write_chat(chat, None, [])
+        return chat
+
+    def save_chat_messages(
+        self, uid: str, chat_id: str, current: ChatDoc | None, messages: list[ChatMessage], pending: str | None
+    ) -> ChatDoc:
+        """Save the messages and pending words. The chat's updated_at moves only when they changed. Products are untouched."""
+        moment = now_utc()
+        chat = current.model_copy(deep=True) if current else self._fresh_chat(uid, chat_id, moment)
+        changed = chat.messages != messages or chat.pending != pending
+        chat.messages, chat.pending = messages, pending
+        if not chat.title:
+            first = next((message.text for message in messages if message.role == "user"), "")
+            chat.title = title_of(first)
+        if changed and current is not None:
+            chat.timestamps.updated_at = moment
+        names = ["messages", "pending", "title"] + (["timestamps.updated_at"] if changed else [])
+        self._write_chat(chat, current, names)
+        return chat
+
+    def save_chat_product(
+        self, uid: str, chat_id: str, current: ChatDoc | None, name: str, filters: dict[str, Any], session_id: str,
+        remembered: Sequence[str] = (),
+    ) -> ChatDoc:
+        """Add or update the entry for this product. Only this entry's updated_at moves, and the chat's."""
+        moment = now_utc()
+        chat = current.model_copy(deep=True) if current else self._fresh_chat(uid, chat_id, moment)
+        old = next((entry for entry in chat.products if entry.product == name), None)
+        entry = ChatProduct(
+            product=name,
+            timestamps=ProductTimestamps(created_at=old.timestamps.created_at if old else moment, updated_at=moment),
+            filters=filters,
+            remembered=list(remembered),
+            session_id=session_id,
+        )
+        chat.products = [entry if p.product == name else p for p in chat.products] if old else [*chat.products, entry]
+        chat.timestamps.updated_at = moment
+        self._write_chat(chat, current, ["products", "timestamps.updated_at"])
+        return chat
+
+    def mark_chat_opened(self, chat: ChatDoc) -> ChatDoc:
+        """Stamp last_opened_at and nothing else."""
+        chat = chat.model_copy(deep=True)
+        chat.timestamps.last_opened_at = now_utc()
+        self._write_chat(chat, chat, ["timestamps.last_opened_at"])
+        return chat
 
     # ---------- Products ----------
 

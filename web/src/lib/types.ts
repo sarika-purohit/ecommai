@@ -23,6 +23,8 @@ export interface MustHave {
 export interface NiceToHave {
   attribute: string;
   value: DetailValue;
+  /** Memory mode's share in a colour mix from past chats (0 to 1). */
+  weight?: number | null;
 }
 
 export interface ShoppingBrief {
@@ -43,6 +45,8 @@ export interface ShoppingBrief {
   /** Wishes the agent can't check yet, such as a brand. Shown to the shopper, never used to filter. */
   not_checkable: string[];
   question: string | null;
+  /** Filters that came from the shopper's past chats about this product, not their words ("colour", "gender", "size"...). */
+  remembered: string[];
 }
 
 /** [ymin, xmin, ymax, xmax] on a 0-1000 scale. */
@@ -221,11 +225,16 @@ export interface BriefInput {
   text?: string;
   /** A photo or screenshot the shopper added, or a link to one. */
   image?: Blob | string;
-  pincode: string;
+  /** Optional: without one there are no delivery dates. */
+  pincode?: string | null;
   language: string;
   source: SearchSource;
   /** False in the AI chat: never ask a question, search with what was said. */
   ask?: boolean;
+  /** The saved AI chat this belongs to, so its product is kept in that chat. */
+  chat_id?: string;
+  /** True: fill what was left open from the shopper's past chats about the same product. */
+  memory?: boolean;
 }
 
 export interface BriefRequestBody {
@@ -233,16 +242,21 @@ export interface BriefRequestBody {
   image_url?: string;
   image_base64?: string;
   image_mime_type?: string;
-  pincode: string;
+  pincode?: string;
   language: string;
   source: SearchSource;
   ask?: boolean;
+  chat_id?: string;
+  /** True: fill what was left open from the shopper's past chats about the same product. */
+  memory?: boolean;
 }
 
 export interface BriefResponse {
   session_id: string;
   brief: ShoppingBrief;
   question?: string | null;
+  /** The plain product name ("kurta"), or null while the product type is only a guess. */
+  product?: string | null;
 }
 
 /** One edit to the checklist. Field names match ShoppingBrief so the agent can apply them directly. */
@@ -259,16 +273,91 @@ export type BriefChange =
   | { type: "set_pincode"; pincode: string }
   | { type: "set_size"; size: string | null }
   | { type: "set_min_rating"; min_rating: number | null }
-  | { type: "set_source"; source: SearchSource };
+  | { type: "set_source"; source: SearchSource }
+  | { type: "set_memory"; enabled: boolean };
 
 export interface BriefUpdateRequest {
   session_id: string;
   change: BriefChange;
   ask?: boolean;
+  chat_id?: string;
+  /** True: fill what was left open from the shopper's past chats about the same product. */
+  memory?: boolean;
 }
 
 export interface BriefUpdateResponse {
+  /** Another search than the one sent, when the change moved the chat to another product. */
+  session_id: string;
   brief: ShoppingBrief;
+  product: string | null;
+}
+
+// ---------- Saved chats ----------
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "ai";
+  text: string;
+  error?: boolean;
+  /** The plain name of the product the message was about. */
+  product?: string;
+  /** "What to give up" choices, shown as buttons under an AI message when nothing matched. */
+  tradeoffs?: { key: string; label: string; matches: number; changes: BriefChange[] }[];
+  /** One-tap product types under the message, sent as the shopper's next message. */
+  picks?: string[];
+}
+
+/** Every time is set by the agent, as an ISO-8601 UTC string ending in Z. */
+export interface ChatTimes {
+  created_at: string;
+  updated_at: string;
+  last_opened_at: string;
+}
+
+export interface ChatProduct {
+  product: string;
+  timestamps: { created_at: string; updated_at: string };
+  /** The checklist as readable JSON, e.g. { colour: "maroon", sheerness: { not: "see-through" } }. */
+  filters: Record<string, unknown>;
+  session_id: string;
+}
+
+export interface SavedChat {
+  chat_id: string;
+  title: string;
+  timestamps: ChatTimes;
+  messages: ChatMessage[];
+  pending: string | null;
+  products: ChatProduct[];
+}
+
+export interface ChatSummary {
+  chat_id: string;
+  title: string;
+  timestamps: ChatTimes;
+  products: string[];
+}
+
+export interface ChatMessagesBody {
+  messages: ChatMessage[];
+  pending: string | null;
+}
+
+export interface ActiveProduct {
+  product: string;
+  session_id: string;
+  brief: ShoppingBrief;
+  source: SearchSource;
+  query_text: string;
+  /** The saved results, only for a catalogue search made in the last day; otherwise the app searches again. */
+  results: DoneEvent | null;
+}
+
+export interface OpenChatResponse {
+  chat: SavedChat;
+  /** True when the chat was last opened over a day ago. */
+  welcome_back: boolean;
+  active: ActiveProduct | null;
 }
 
 export interface SearchRequest {
@@ -457,4 +546,135 @@ export interface CatalogPage {
   categories: CategoryCount[];
   /** True when no product had every word, so the closest ones are shown. */
   partial: boolean;
+}
+
+// ---------- Complete the look ----------
+
+export type Occasion = "office" | "casual" | "party" | "festive" | "sports";
+export type LookStyle = "minimal" | "classic" | "bold" | "street";
+export type LookSlot = "top" | "bottom" | "shoes" | "bag" | "watch" | "sunglasses";
+export type LookPartName = "colour" | "style" | "occasion" | "silhouette" | "preferences" | "budget";
+
+export interface LooksRequest {
+  occasion?: Occasion;
+  style?: LookStyle;
+  /** For the whole look, this product included. */
+  budget_max_inr?: number;
+  /** Who it's for, when the product is unisex. */
+  gender?: GenderFilter;
+}
+
+export interface LookPart {
+  name: LookPartName;
+  weight: number;
+  /** 0-1; null when unknown, and then it's left out of the match. */
+  score: number | null;
+}
+
+export interface LookSuggestion {
+  slot: LookSlot;
+  product: CatalogItem;
+  /** 0-100, the weighted average of the known parts; null when Gemini couldn't score it. */
+  match: number | null;
+  parts: LookPart[];
+  /** Gemini's styling note: a suggestion, not a fact. */
+  reason: string;
+}
+
+export interface LookPiece {
+  slot: LookSlot;
+  /** Best first; the others are swaps. */
+  choices: LookSuggestion[];
+}
+
+export interface Look {
+  occasion: Occasion;
+  title: string;
+  summary: string;
+  pieces: LookPiece[];
+  /** Styling ideas we don't sell: never products. */
+  ideas: string[];
+  /** The product plus the picks, before delivery; null when a price is missing. */
+  total_price: number | null;
+  left_out: LookSlot[];
+}
+
+export interface LookRow {
+  kind: "pair" | "shoes" | "accessories";
+  items: LookSuggestion[];
+}
+
+export interface Looks {
+  product_id: string;
+  looks: Look[];
+  rows: LookRow[];
+  weights: Record<LookPartName, number>;
+  budget_max_inr: number | null;
+  sample_data: boolean;
+  demo_prices: boolean;
+  note: string | null;
+}
+
+// ---------- Demo orders ----------
+
+/** An order placed in our demo store: no payment, nothing delivered. */
+export interface DemoOrder {
+  id: string;
+  product_id: string;
+  title: string;
+  article_type: string;
+  gender: string;
+  base_colour: string | null;
+  usage: string | null;
+  size: string | null;
+  price_inr: number | null;
+  /** Server time, or backdated for a demo. */
+  ordered_at: string;
+  source: "demo_catalog";
+  seeded: boolean;
+}
+
+/** POST /api/orders */
+export interface OrderRequest {
+  product_id: string;
+  size: string | null;
+}
+
+export interface OrderResponse {
+  order: DemoOrder;
+}
+
+export interface OrderList {
+  orders: DemoOrder[];
+}
+
+export interface GoesWith {
+  product_id: string;
+  title: string;
+  ordered_at: string;
+  seeded: boolean;
+}
+
+export interface OrderPick {
+  product: CatalogItem;
+  slot: LookSlot;
+  /** 0-100, Gemini's styling match with the order it goes with best. */
+  match: number;
+  reason: string;
+  goes_with: GoesWith[];
+}
+
+/** Something that goes with an order but that we don't sell: shown as an idea, never as a product. */
+export interface OrderIdea {
+  goes_with_title: string;
+  text: string;
+}
+
+/** GET /api/suggestions/from-orders */
+export interface OrderSuggestions {
+  items: OrderPick[];
+  ideas: OrderIdea[];
+  note: string | null;
+  sample_data: boolean;
+  demo_orders: boolean;
 }

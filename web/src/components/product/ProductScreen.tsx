@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } fr
 import { AppHeader } from "@/components/AppHeader";
 import { CheckIcon, ChevronDownIcon, ExternalIcon, ShieldIcon } from "@/components/icons";
 import { ScreenPlaceholder } from "@/components/NoSession";
+import { CompleteTheLook } from "@/components/product/CompleteTheLook";
 import { TickList } from "@/components/proof/TickList";
 import { getProduct } from "@/lib/api";
 import { useBuy } from "@/lib/buy";
@@ -248,6 +249,12 @@ function Product({ product, sessionId, briefs }: { product: ProductDetails; sess
         )}
         {outOfStock.length > 0 && !oneSize ? <p className="text-base text-ink-soft">{text.outOfStock(outOfStock)}</p> : null}
       </Section>
+
+      {live ? null : (
+        <Section title={strings.look.title} hint={strings.look.hint}>
+          <CompleteTheLook product={product} gender={brief?.gender === "men" || brief?.gender === "women" ? brief.gender : null} />
+        </Section>
+      )}
 
       {live ? null : <Reviews product={product} />}
 

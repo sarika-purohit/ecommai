@@ -1,5 +1,7 @@
 // Every piece of text the shopper sees. A Hindi version is another object of type Strings.
 
+import type { LookPartName, LookRow, LookSlot, LookStyle, Occasion } from "@/lib/types";
+
 interface AttributeWords {
   /** What the detail is called on its own, e.g. "Sleeves". */
   name: string;
@@ -208,9 +210,26 @@ const en = {
     tradeoffs: "Tap one to relax it:",
     removed: (label: string) => `Without “${label}”.`,
     relaxed: (label: string) => label,
-    needPincode: "First, your pincode, so I can check delivery dates.",
     sourceLabel: "Search in",
     seeDetails: "Full results and proof",
+    opening: "Opening your chat…",
+    welcomeBack: (date: string) => `Welcome back. This chat is from ${date}, so I’ve checked prices again.`,
+    welcomeBackPlain: (date: string) => `Welcome back. This chat is from ${date}.`,
+    pastChats: "Past chats",
+    pastChatsLabel: "See your past chats",
+    pastChatsTitle: "Your past chats",
+    backToChat: "Back to this chat",
+    noPastChats: "No past chats yet. Your chats are saved here.",
+    untitled: "New chat",
+    loadingChats: "Loading your chats…",
+    productsLabel: "Products in this chat",
+    groups: { today: "Today", yesterday: "Yesterday", week: "This week", older: "Older" },
+    ago: {
+      now: "Just now",
+      minutes: (n: number) => `${n} min ago`,
+      hours: (n: number) => `${n} h ago`,
+      days: (n: number) => `${n} d ago`,
+    },
     busy: "Still working on your last message.",
     sourceLater: {
       live: "Okay, I’ll check live stores once you tell me what kind of product. The list on the page is our demo catalogue.",
@@ -221,17 +240,23 @@ const en = {
     whatProduct: (kept: string[]) =>
       `What kind of product are you looking for? Pick one or type it.${kept.length > 0 ? ` I’ll keep “${kept.join(", ")}”.` : ""}`,
     picksLabel: "Product types",
+    memorySwitch: "Memory",
+    memorySwitchLabel: "Use my past searches to fill in what I leave out",
+    memoryOn: "Memory is on. I’ll use your past searches for what you leave out.",
+    memoryOff: "Memory is off. Showing results from only what you said.",
+    fromMemory: (product: string, filters: string[]) =>
+      `From your past ${product} searches: ${filters.join(" · ")}. Say if you want something else.`,
+    fromMemoryMarker: "From your past searches",
     browsing: (what: string, total: number) =>
       `Here’s everything ${what} in the shop: ${total.toLocaleString("en-IN")} products of every kind. Say what kind of product, like “tops”, and I’ll check each one against what you asked.`,
   },
 
   pincode: {
     title: "Where should it arrive?",
-    body: "Your pincode lets us work out real delivery dates.",
+    body: "Optional: add your pincode to see delivery dates.",
     label: "Pincode",
     save: "Save pincode",
     invalid: "Enter a 6-digit pincode, like 411038.",
-    required: "Add your pincode first.",
     deliveringTo: (pincode: string) => `Delivering to ${pincode}`,
     change: "Change",
   },
@@ -400,6 +425,10 @@ const en = {
     fromStoreDescription: (store: string | null) => (store ? `From ${store}’s description` : "From the store’s description"),
     reviewCounts: (agree: number, disagree: number) => `${agree} agree · ${disagree} disagree`,
     demoReviews: "Demo reviews",
+    match: (percent: number) => `${percent}% match`,
+    matchWhy: (proven: number, total: number) => `${proven} of ${total} must-haves proven`,
+    matchUnsure: (count: number) => `${count} not sure`,
+    matchMissing: (count: number) => `${count} missing`,
     nothing: "We found nothing to go on, so we can’t confirm this one.",
   },
 
@@ -493,11 +522,11 @@ const en = {
     clearTaste: "Clear what we’ve learned",
     tasteCleared: "Cleared. We’ve forgotten your style.",
     dataTitle: "Your data",
-    dataHint: "We keep your name, email, pincode, rules, learned style and past searches.",
+    dataHint: "We keep your name, email, pincode, rules, learned style, demo orders and past searches.",
     deleteData: "Delete my data",
     confirmTitle: "Delete everything?",
     confirmBody:
-      "This removes your profile, rules, learned style and past searches, then signs you out. It can’t be undone.",
+      "This removes your profile, rules, learned style, demo orders and past searches, then signs you out. It can’t be undone.",
     confirmDelete: "Yes, delete my data",
     deleting: "Deleting your data…",
     signOut: "Sign out",
@@ -505,6 +534,66 @@ const en = {
 
   demo: {
     badge: "Demo data",
+  },
+
+  orders: {
+    railTitle: "Goes with your recent demo orders",
+    railHint: "Styling suggestions by Gemini from our sample catalogue. Demo orders only: no payment, nothing delivered.",
+    goesWith: (title: string, day: string, seeded: boolean) =>
+      `Goes with your ${title} · Demo order · ${day}${seeded ? " · seeded for this demo" : ""}`,
+    ideas: (list: string) => `Ideas, not sold here: ${list}`,
+    placeFailed: "We couldn’t place your demo order.",
+    profileTitle: "Your demo orders",
+    profileHint: "Orders you placed in the demo store. No payment was taken and nothing was delivered.",
+    none: "No demo orders yet.",
+    line: (title: string, day: string, seeded: boolean) => `${title} · Demo order · ${day}${seeded ? " · seeded for this demo" : ""}`,
+    clear: "Clear my demo orders",
+    cleared: "Cleared. Your demo orders are gone.",
+  },
+
+  look: {
+    title: "Complete the look",
+    hint: "Styling suggestions by Gemini, from our sample catalogue. They’re opinions, not facts.",
+    loading: "Styling the look…",
+    occasionLegend: "Occasion",
+    budgetLegend: "Whole look under",
+    styleLegend: "Style",
+    any: "Any",
+    occasions: { office: "Office", casual: "Casual", party: "Party", festive: "Festive", sports: "Sports" } as Record<Occasion, string>,
+    styles: { minimal: "Minimal", classic: "Classic", bold: "Bold", street: "Street" } as Record<LookStyle, string>,
+    budgets: [3000, 5000, 10000],
+    slots: { top: "Top", bottom: "Bottom", shoes: "Shoes", bag: "Bag", watch: "Watch", sunglasses: "Sunglasses" } as Record<LookSlot, string>,
+    rows: { pair: "Pair it with", shoes: "Shoes that work", accessories: "Bags and accessories" } as Record<LookRow["kind"], string>,
+    suggestion: "AI styling suggestion",
+    match: (percent: number) => `${percent}% match`,
+    unscored: "Not scored",
+    why: "Why this match?",
+    parts: {
+      colour: "Colour",
+      style: "Style",
+      occasion: "Occasion",
+      silhouette: "Silhouette",
+      preferences: "Your likes",
+      budget: "Budget",
+    } as Record<LookPartName, string>,
+    partScore: (score: number | null, weight: number) => (score === null ? `not known · left out` : `${Math.round(score * 100)}% × ${weight}`),
+    swap: "Swap",
+    swapLabel: (slot: string) => `Swap the ${slot.toLowerCase()}`,
+    remove: "Remove",
+    removeLabel: (slot: string) => `Remove the ${slot.toLowerCase()}`,
+    reset: "Bring back removed pieces",
+    ideasTitle: "Finishing touches · ideas, not sold here",
+    total: (amount: string) => `Look total ${amount}`,
+    totalNote: "This product and the picks, before delivery",
+    noTotal: "No total: a price is missing.",
+    overBudget: (amount: string) => `Over your ${amount} budget`,
+    leftOut: (slots: string, amount: string) => `Left out to stay under ${amount}: ${slots}.`,
+    howTitle: "How match % works",
+    how: (weights: string) =>
+      `A weighted average: ${weights}. Gemini scores the first four from the photos; anything we don’t know is left out, never guessed.`,
+    sample: "Sample catalogue",
+    demoPrices: "Demo prices",
+    failed: "We couldn’t style this right now.",
   },
 
   status: {
@@ -541,6 +630,8 @@ const en = {
     size: (size: string) => `Size ${size}`,
     addSize: "Add your size",
     minRating: (rating: number) => `Rated ${rating}★ & up`,
+    share: (label: string, percent: number) => `${label} · ${percent}%`,
+    mix: (labels: string[]) => labels.map((label, n) => `${["Mostly", "some", "a little"][n] ?? "a little"} ${label}`).join(", "),
     genders: {
       men: "men",
       women: "women",

@@ -43,6 +43,25 @@ export function todayInIndia(): string {
   }).format(new Date());
 }
 
+const indiaDayFormat = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const indiaShortFormat = new Intl.DateTimeFormat(strings.locale, { timeZone: "Asia/Kolkata", day: "numeric", month: "short" });
+
+/** The calendar day (YYYY-MM-DD) an agent time falls on in India. */
+export function dayInIndia(time: string | Date): string {
+  return indiaDayFormat.format(typeof time === "string" ? new Date(time) : time);
+}
+
+/** "12 Oct": the day an agent time falls on in India. */
+export function shortDayInIndia(time: string): string {
+  return indiaShortFormat.format(new Date(time));
+}
+
 export function addDays(iso: string, days: number): string {
   const date = parseIsoDate(iso) ?? new Date();
   date.setDate(date.getDate() + days);

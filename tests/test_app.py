@@ -113,9 +113,24 @@ def test_a_request_needs_words_or_a_photo():
 
 def test_bad_input_is_a_400_with_a_message():
     client, _ = make_client()
-    response = client.post("/api/brief", json={"text": "shoes"})
+    response = client.post("/api/brief", json={"text": "shoes", "pincode": "5" * 20})
     assert response.status_code == 400
     assert "pincode" in response.json()["detail"]
+
+
+def test_one_prompt_is_enough_without_a_pincode():
+    client, wired = make_client()
+    made = client.post("/api/brief", json={"text": REQUEST["text"], "language": "en"})
+    assert made.status_code == 200
+    assert made.json()["brief"]["pincode"] is None
+    assert "pincode" not in wired.store.db.docs("users").get(DEMO_USER_ID, {})
+
+
+def test_without_a_pincode_the_saved_one_is_used():
+    client, _ = make_client()
+    client.put("/api/me", json={"pincode": "400001"})
+    made = client.post("/api/brief", json={"text": REQUEST["text"], "language": "en"}).json()
+    assert made["brief"]["pincode"] == "400001"
 
 
 def test_gemini_failing_is_a_busy_503():

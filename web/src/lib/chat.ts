@@ -1,9 +1,9 @@
 "use client";
 
-import { ApiError, createBrief, getCatalog, isAbort, searchProducts, updateBrief } from "@/lib/api";
+import { ApiError, createBrief, getCatalog, isAbort, openChat, saveChatMessages, searchProducts, updateBrief } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
-import { mustHaveLabel, tradeoffLabel } from "@/lib/labels";
-import { rupees } from "@/lib/format";
+import { mustHaveLabel, rememberedLabels, tradeoffLabel } from "@/lib/labels";
+import { rupees, shortDayInIndia } from "@/lib/format";
 import {
   addWeb,
   pincodeStore,
@@ -20,9 +20,11 @@ import {
   clearSearch,
   type SearchSession,
 } from "@/lib/session";
-import { memoryValue } from "@/lib/stored";
+import { memoryValue, storedValue } from "@/lib/stored";
 import { strings } from "@/lib/strings";
-import type { BriefChange, DoneEvent, SearchSource, ShoppingBrief, Tradeoff, WebEvent } from "@/lib/types";
+import type { BriefChange, ChatMessage, DoneEvent, SearchSource, ShoppingBrief, Tradeoff, WebEvent } from "@/lib/types";
+
+export type { ChatMessage } from "@/lib/types";
 
 /**
  * The AI chat. Its memory is the agent's checklist for one session: the first message makes it (POST /api/brief)
@@ -33,8 +35,12 @@ import type { BriefChange, DoneEvent, SearchSource, ShoppingBrief, Tradeoff, Web
  * "tops for women" searches red tops for women, and a guessed product type never sticks. Meanwhile the shop shows
  * everything that fits what they did say ("red", "for women", "under ₹2,000"), every product type mixed together.
  *
- * The memory lasts while the page is open: "New search", a new search from the store's search bar or reloading
- * the page starts over, so an old checklist never leaks into a new request.
+ * Every chat is saved for the shopper (PUT /api/chats/{id}/messages after each change), and the agent keeps each
+ * product the chat talked about with its filters. Reloading the page reopens the chat in `chatIdStore`; the
+ * "Past chats" list opens any other, and a chip opens another product of the same chat. Opening gives the saved
+ * results when they're fresh, else searches again quietly (no new message), and never asks Gemini. "New search"
+ * or a new search from the store's search bar starts a new chat, so an old checklist never leaks into a new
+ * request. Saying something about another product ("a watch instead") moves the chat to that product's search.
  *
  * Searches run here, outside any component, so closing the chat or browsing doesn't stop them. Results go to the
  * same stores the results and product pages read.
@@ -51,46 +57,134 @@ const PRODUCT_PICKS = [
   "Backpacks", "Sunglasses",
 ];
 
-export interface ChatMessage {
-  id: string;
-  role: "user" | "ai";
-  text: string;
-  error?: boolean;
-  /** "What to give up" choices, shown as buttons under an AI message when nothing matched. */
-  tradeoffs?: { key: string; label: string; matches: number; changes: BriefChange[] }[];
-  /** One-tap product types under the message, sent as the shopper's next message. */
-  picks?: string[];
-}
-
 export interface ChatState {
+  /** The saved chat's id: "c_" and 32 hex characters. */
+  chatId: string;
   sessionId: string | null;
   messages: ChatMessage[];
   /** False after "Back to all products": the store shows its own list until the next AI search. */
   showResults: boolean;
   /** What the shopper has said while the product type is unknown, read again together with their next message. */
   pending: string | null;
+  /** The product the chat is on now, by plain name ("kurta"), and every product it has talked about. */
+  product: string | null;
+  products: string[];
+  /** A note for the top of the chat that isn't one of its messages, so it isn't saved, e.g. "Welcome back". */
+  note: string | null;
 }
 
 export type AiProgress =
   | { phase: "understanding" }
+  | { phase: "opening" }
   | { phase: "checking"; found: number | null; total: number; checked: number; passed: number };
 
-/** In memory only, so reloading the page starts a fresh chat. */
+/** The chat on screen. Its messages are saved by `setChat`; a reload opens it again from `chatIdStore`. */
 export const chatStore = memoryValue<ChatState>();
+/** The current chat's id, kept on this device so a reload can reopen it. */
+export const chatIdStore = storedValue<string>("ecommai.chat", "local");
 export const chatOpenStore = memoryValue<boolean>();
+/** The Memory switch: whether past searches fill in what the shopper leaves out. On until they turn it off. */
+export const memoryStore = storedValue<boolean>("ecommai.memory", "local");
 /** Set while a message is being read or a search is running. */
 export const aiProgressStore = memoryValue<AiProgress>();
 
 let controller: AbortController | null = null;
 
+export function memoryOn(): boolean {
+  return memoryStore.get() ?? true;
+}
+
+/** Says which filters came from memory, when a new search got any. */
+function sayRemembered(brief: ShoppingBrief, product: string | null | undefined) {
+  if (brief.remembered.length === 0) return;
+  say({ role: "ai", text: text.fromMemory(product ?? chat().product ?? "", rememberedLabels(brief)) });
+}
+
+/** Flips the Memory switch. With a search showing, it is edited and searched again; the agent fills or forgets. */
+export async function setMemory(enabled: boolean): Promise<void> {
+  if (isBusy()) return;
+  memoryStore.set(enabled);
+  const session = chatSession();
+  if (session && !needsProduct(session.brief)) await applyChanges([{ type: "set_memory", enabled }], enabled ? text.memoryOn : text.memoryOff);
+}
+
+function newChatId(): string {
+  return `c_${crypto.randomUUID().replaceAll("-", "")}`;
+}
+
+function blankChat(chatId: string): ChatState {
+  return { chatId, sessionId: null, messages: [], showResults: false, pending: null, product: null, products: [], note: null };
+}
+
 function chat(): ChatState {
-  return chatStore.get() ?? { sessionId: null, messages: [], showResults: false, pending: null };
+  const existing = chatStore.get();
+  if (existing) return existing;
+  const chatId = chatIdStore.get() ?? newChatId();
+  chatIdStore.set(chatId);
+  return blankChat(chatId);
+}
+
+// Saves go one at a time and the latest wins, so a slow save never lands after a newer one. A failed save is
+// dropped: the chat keeps working, and the next change saves everything again.
+let waiting: { chatId: string; messages: ChatMessage[]; pending: string | null } | null = null;
+let saving = false;
+
+async function flushSaves(): Promise<void> {
+  if (saving) return;
+  saving = true;
+  try {
+    while (waiting) {
+      const job = waiting;
+      waiting = null;
+      try {
+        await saveChatMessages(job.chatId, job.messages, job.pending);
+      } catch {}
+    }
+  } finally {
+    saving = false;
+  }
+}
+
+/** Sets the chat on screen and saves its messages and pending words when either changed. */
+function setChat(next: ChatState) {
+  const before = chatStore.get();
+  chatStore.set(next);
+  const changed = !before || before.messages !== next.messages || before.pending !== next.pending;
+  if (!changed || (next.messages.length === 0 && next.pending === null)) return;
+  waiting = { chatId: next.chatId, messages: next.messages, pending: next.pending };
+  void flushSaves();
 }
 
 function say(message: Omit<ChatMessage, "id">) {
   const current = chat();
   const id = `${Date.now().toString(36)}-${current.messages.length}`;
-  chatStore.set({ ...current, messages: [...current.messages, { ...message, id }] });
+  const product = message.role === "ai" && current.product ? { product: current.product } : {};
+  setChat({ ...current, messages: [...current.messages, { ...message, ...product, id }] });
+}
+
+/** Notes the product a brief response was about; null while the product type is only a guess. */
+function noteProduct(product: string | null | undefined) {
+  const current = chat();
+  const name = product ?? null;
+  const products = name && !current.products.includes(name) ? [...current.products, name] : current.products;
+  chatStore.set({ ...current, product: name, products });
+}
+
+/** Moves the chat to another search, when a change made the agent switch product. */
+function followSession(sessionId: string, brief: ShoppingBrief, requestText: string) {
+  const old = sessionStore.get();
+  sessionStore.set({
+    sessionId,
+    requestText,
+    hasPhoto: false,
+    source: old?.source,
+    brief: { ...brief, question: null },
+    dismissedQuestion: null,
+    rulesOff: [],
+    searchRun: 0,
+  });
+  resultsStore.set(null);
+  chatStore.set({ ...chat(), sessionId, showResults: false });
 }
 
 export function chatSource(): SearchSource {
@@ -115,7 +209,7 @@ export function isBusy(): boolean {
 export async function sendMessage(words: string, photo: Blob | null = null): Promise<string | null> {
   const trimmed = words.trim();
   const pincode = pincodeStore.get();
-  if (isBusy() || (!trimmed && !photo) || !pincode) return null;
+  if (isBusy() || (!trimmed && !photo)) return null;
   say({ role: "user", text: trimmed || text.photoOnly });
   aiProgressStore.set({ phase: "understanding" });
   const session = chatSession();
@@ -126,9 +220,17 @@ export async function sendMessage(words: string, photo: Blob | null = null): Pro
   let brief: ShoppingBrief;
   try {
     if (session && !photo && !pending) {
-      ({ brief } = await updateBrief(session.sessionId, { type: "text", text: trimmed }, false));
-      updateSession((current) => ({ ...current, brief, searchRun: current.searchRun + 1 }));
-      said = `${session.requestText}. ${trimmed}`;
+      const response = await updateBrief(session.sessionId, { type: "text", text: trimmed }, false, chat().chatId, memoryOn());
+      ({ brief } = response);
+      noteProduct(response.product);
+      if (response.session_id === session.sessionId) {
+        updateSession((current) => ({ ...current, brief, searchRun: current.searchRun + 1 }));
+        said = `${session.requestText}. ${trimmed}`;
+      } else {
+        followSession(response.session_id, brief, trimmed);
+        said = trimmed;
+        sayRemembered(brief, response.product);
+      }
     } else {
       if (session && photo && !pending) say({ role: "ai", text: text.photoNewSearch });
       said = [pending, trimmed].filter(Boolean).join(". ");
@@ -140,7 +242,11 @@ export async function sendMessage(words: string, photo: Blob | null = null): Pro
         language: strings.language,
         source,
         ask: false,
+        chat_id: chat().chatId,
+        memory: memoryOn(),
       });
+      noteProduct(response.product);
+      sayRemembered(response.brief, response.product);
       sessionStore.set({
         sessionId: response.session_id,
         requestText: said,
@@ -152,7 +258,7 @@ export async function sendMessage(words: string, photo: Blob | null = null): Pro
         searchRun: 0,
       });
       resultsStore.set(null);
-      chatStore.set({ ...chat(), sessionId: response.session_id, showResults: false });
+      chatStore.set({ ...chat(), sessionId: response.session_id, showResults: false, note: null });
       brief = response.brief;
     }
   } catch (error) {
@@ -163,7 +269,7 @@ export async function sendMessage(words: string, photo: Blob | null = null): Pro
   if (needsProduct(brief)) {
     // The agent had to guess the product type, so its checklist isn't searched. Show the shop's products that fit
     // what was said instead, and keep the words for the next message.
-    chatStore.set({ ...chat(), pending: said || pending, showResults: false });
+    setChat({ ...chat(), pending: said || pending, showResults: false });
     const shown = await shopSearch(brief);
     aiProgressStore.set(null);
     const picks = PRODUCT_PICKS.map(productWord);
@@ -175,7 +281,7 @@ export async function sendMessage(words: string, photo: Blob | null = null): Pro
     say({ role: "ai", text: text.whatProduct(kept(brief)), picks });
     return null;
   }
-  chatStore.set({ ...chat(), pending: null });
+  setChat({ ...chat(), pending: null });
   await runSearch();
   return null;
 }
@@ -237,9 +343,17 @@ export async function applyChanges(changes: BriefChange[], note: string): Promis
   aiProgressStore.set({ phase: "understanding" });
   try {
     let brief = session.brief;
-    for (const change of changes) ({ brief } = await updateBrief(session.sessionId, change, false));
+    let sessionId = session.sessionId;
+    let product: string | null = null;
+    for (const change of changes) {
+      const response = await updateBrief(sessionId, change, false, chat().chatId, memoryOn());
+      ({ brief, product } = response);
+      sessionId = response.session_id;
+    }
+    noteProduct(product);
     const switchedOff = changes.flatMap((c) => (c.type === "set_rule" && !c.enabled ? [c.must_have] : []));
     const newSource = changes.flatMap((c) => (c.type === "set_source" ? [c.source] : [])).pop();
+    if (sessionId !== session.sessionId) followSession(sessionId, brief, session.requestText);
     updateSession((current) => ({
       ...current,
       brief,
@@ -248,7 +362,9 @@ export async function applyChanges(changes: BriefChange[], note: string): Promis
       searchRun: current.searchRun + 1,
     }));
     if (newSource) sourceStore.set(newSource);
-    say({ role: "ai", text: note });
+    const turnedOn = changes.some((c) => c.type === "set_memory" && c.enabled);
+    if (turnedOn && brief.remembered.length > 0) sayRemembered(brief, product);
+    else say({ role: "ai", text: note });
     if (needsProduct(brief)) {
       aiProgressStore.set(null);
       return;
@@ -282,14 +398,85 @@ export function newChat() {
   controller = null;
   aiProgressStore.set(null);
   clearSearch();
-  chatStore.set({ sessionId: null, messages: [], showResults: false, pending: null });
+  const chatId = newChatId();
+  chatIdStore.set(chatId);
+  chatStore.set(blankChat(chatId));
+}
+
+let restored = false;
+
+/** After a reload, reopens the chat that was on screen. Once per page; a chat never saved is simply not found. */
+export async function restoreChat(): Promise<void> {
+  const chatId = chatIdStore.get();
+  if (restored || chatStore.get() || !chatId) return;
+  restored = true;
+  await openSavedChat(chatId, undefined, true);
+}
+
+/**
+ * Opens a saved chat (or another product of the one on screen) and carries on from where it was left. It adds no
+ * message of its own: the saved results are shown if fresh, else the search is run again quietly. Throws nothing.
+ */
+export async function openSavedChat(chatId: string, product?: string, silent = false): Promise<void> {
+  if (isBusy()) return;
+  aiProgressStore.set({ phase: "opening" });
+  let opened;
+  try {
+    opened = await openChat(chatId, product);
+  } catch (error) {
+    aiProgressStore.set(null);
+    const isNew = error instanceof ApiError && error.kind === "notFound";
+    if (!silent || !isNew) chatStore.set({ ...chat(), note: errorMessage(error) });
+    return;
+  }
+  controller?.abort();
+  controller = null;
+  clearSearch();
+  const { chat: saved, active } = opened;
+  chatIdStore.set(chatId);
+  const date = shortDayInIndia(saved.timestamps.updated_at);
+  const note = opened.welcome_back ? (active ? text.welcomeBack(date) : text.welcomeBackPlain(date)) : null;
+  chatStore.set({
+    chatId,
+    sessionId: active?.session_id ?? null,
+    messages: saved.messages,
+    showResults: false,
+    pending: saved.pending,
+    product: active?.product ?? null,
+    products: saved.products.map((entry) => entry.product),
+    note,
+  });
+  if (!active) {
+    aiProgressStore.set(null);
+    return;
+  }
+  const session: SearchSession = {
+    sessionId: active.session_id,
+    requestText: active.query_text,
+    hasPhoto: false,
+    source: active.source,
+    brief: { ...active.brief, question: null },
+    dismissedQuestion: null,
+    rulesOff: [],
+    searchRun: 0,
+  };
+  sessionStore.set(session);
+  sourceStore.set(active.source);
+  if (active.results) {
+    resultsStore.set({ sessionId: session.sessionId, searchRun: 0, brief: session.brief, source: active.source, done: active.results, web: null });
+    chatStore.set({ ...chat(), showResults: true });
+    aiProgressStore.set(null);
+    return;
+  }
+  await runSearch(true);
 }
 
 export function showStore() {
   chatStore.set({ ...chat(), showResults: false });
 }
 
-async function runSearch(): Promise<void> {
+/** `quiet`: a search on reopening a chat, which adds no "Checked N…" message (errors are still said). */
+async function runSearch(quiet = false): Promise<void> {
   const session = sessionStore.get();
   if (!session) {
     aiProgressStore.set(null);
@@ -313,7 +500,7 @@ async function runSearch(): Promise<void> {
       }
       if (event.type === "done") {
         done = true;
-        finish(session, event, web);
+        finish(session, event, web, quiet);
         giveUp = setTimeout(() => mine.abort(), WEB_WAIT_MS);
         continue;
       }
@@ -338,11 +525,12 @@ async function runSearch(): Promise<void> {
   }
 }
 
-function finish(session: SearchSession, done: DoneEvent, web: WebEvent | null) {
+function finish(session: SearchSession, done: DoneEvent, web: WebEvent | null, quiet: boolean) {
   const source = sourceOf(session);
   if (!web && source === "live") webWaitStore.set(runKey(session));
   resultsStore.set({ sessionId: session.sessionId, searchRun: session.searchRun, brief: session.brief, source, done, web });
   aiProgressStore.set(null);
+  if (quiet) return;
   if (done.checked === 0) {
     say({ role: "ai", text: strings.results.nothingFound[source] });
     return;

@@ -93,3 +93,26 @@ export function tradeoffLabel(tradeoff: Tradeoff, brief: ShoppingBrief): string 
   const label = dropped.length === 1 ? mustHaveLabel(dropped[0]) : attributeName(attribute);
   return dropped.length > 0 && dropped.every((m) => m.from_rule) ? text.tradeoffRule(label) : text.tradeoffMustHave(label);
 }
+
+/** The filters memory filled in, as short words: ["Men", "Yellow", "M"]. */
+export function rememberedLabels(brief: ShoppingBrief): string[] {
+  const labels: string[] = [];
+  for (const key of brief.remembered) {
+    if (key === "gender" && brief.gender) labels.push(capitalise(words.genders[brief.gender] ?? brief.gender));
+    else if (key === "size" && brief.size) labels.push(brief.size);
+    else if (key === "budget_max_inr" && brief.budget_max_inr !== null) labels.push(words.budget(rupees(brief.budget_max_inr)));
+    else if (key === "min_rating" && brief.min_rating !== null) labels.push(words.minRating(brief.min_rating));
+    else {
+      labels.push(...brief.must_haves.filter((m) => !m.from_rule && m.attribute === key).map(mustHaveLabel));
+      const mix = brief.nice_to_haves.filter((n) => n.weight && n.attribute === key).sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+      if (mix.length > 0) labels.push(words.mix(mix.map(niceToHaveLabel)));
+    }
+  }
+  return labels;
+}
+
+/** A nice-to-have chip's words; a colour from memory's mix shows its share: "Blue · 51%". */
+export function niceToHaveChip(nice: NiceToHave): string {
+  const label = niceToHaveLabel(nice);
+  return nice.weight ? words.share(label, Math.round(nice.weight * 100)) : label;
+}

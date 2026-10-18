@@ -16,15 +16,26 @@ import {
   type CatalogPage,
   type CatalogQuery,
   type CategoryCount,
+  type ChatMessage,
+  type ChatMessagesBody,
+  type ChatSummary,
   type CheckoutRequest,
   type CheckoutResponse,
+  type DemoOrder,
   type DoneEvent,
   type FeedbackAction,
   type FeedbackRequest,
   type GenderFilter,
+  type Looks,
+  type LooksRequest,
   type Me,
   type MeUpdate,
   type MustHave,
+  type OrderList,
+  type OrderRequest,
+  type OrderResponse,
+  type OrderSuggestions,
+  type OpenChatResponse,
   type ProductDetails,
   type ResultCard,
   type RulesBody,
@@ -115,12 +126,15 @@ async function viaMock<T>(call: (mock: MockModule) => Promise<T>): Promise<T> {
 
 /** Fills in fields an older agent might leave out, so screens can rely on them. */
 function withDefaults(brief: ShoppingBrief): ShoppingBrief {
-  return { ...brief, not_checkable: brief.not_checkable ?? [], missing: brief.missing ?? [], min_rating: brief.min_rating ?? null };
+  return { ...brief, not_checkable: brief.not_checkable ?? [], missing: brief.missing ?? [], min_rating: brief.min_rating ?? null, remembered: brief.remembered ?? [] };
 }
 
 async function briefBody(input: BriefInput): Promise<BriefRequestBody> {
-  const body: BriefRequestBody = { pincode: input.pincode, language: input.language, source: input.source };
+  const body: BriefRequestBody = { language: input.language, source: input.source };
+  if (input.pincode) body.pincode = input.pincode;
   if (input.ask !== undefined) body.ask = input.ask;
+  if (input.chat_id) body.chat_id = input.chat_id;
+  if (input.memory !== undefined) body.memory = input.memory;
   if (input.text) body.text = input.text;
   if (typeof input.image === "string") {
     body.image_url = input.image;
@@ -144,13 +158,60 @@ export async function createBrief(input: BriefInput): Promise<BriefResponse> {
  * POST /api/brief/update: apply one edit to the checklist and get the whole checklist back. The agent edits the
  * checklist it saved for this session, so a follow-up like "for men" builds on everything said before.
  */
-export async function updateBrief(sessionId: string, change: BriefChange, ask?: boolean): Promise<BriefUpdateResponse> {
+export async function updateBrief(
+  sessionId: string,
+  change: BriefChange,
+  ask?: boolean,
+  chatId?: string,
+  memory?: boolean,
+): Promise<BriefUpdateResponse> {
   const body: BriefUpdateRequest = { session_id: sessionId, change };
   if (ask !== undefined) body.ask = ask;
+  if (chatId) body.chat_id = chatId;
+  if (memory !== undefined) body.memory = memory;
   const response = mockApi
-    ? await viaMock((mock) => mock.updateBrief(sessionId, change))
+    ? await viaMock((mock) => mock.updateBrief(sessionId, change, chatId))
     : await requestJson<BriefUpdateResponse>("POST", "/api/brief/update", body);
-  return { brief: withDefaults(response.brief) };
+  return { session_id: response.session_id ?? sessionId, brief: withDefaults(response.brief), product: response.product ?? null };
+}
+
+/** GET /api/chats: the shopper's saved chats, newest first. */
+export async function listChats(): Promise<ChatSummary[]> {
+  const response = mockApi
+    ? await viaMock((mock) => mock.listChats())
+    : await requestJson<{ chats: ChatSummary[] }>("GET", "/api/chats");
+  return response.chats;
+}
+
+/**
+ * POST /api/chats/{id}/open: the chat's messages and, for one of its products (the latest unless named), the saved
+ * search to carry on with. No AI is asked.
+ */
+export async function openChat(chatId: string, product?: string): Promise<OpenChatResponse> {
+  const body = product ? { product } : {};
+  const response = mockApi
+    ? await viaMock((mock) => mock.openChat(chatId, product))
+    : await requestJson<OpenChatResponse>("POST", `/api/chats/${chatId}/open`, body);
+  return {
+    ...response,
+    active: response.active
+      ? {
+          ...response.active,
+          brief: withDefaults(response.active.brief),
+          results: response.active.results ? withDoneDefaults(response.active.results) : null,
+        }
+      : null,
+  };
+}
+
+/** PUT /api/chats/{id}/messages: saves everything said so far. Creates the chat the first time. */
+export async function saveChatMessages(chatId: string, messages: ChatMessage[], pending: string | null): Promise<void> {
+  const body: ChatMessagesBody = { messages, pending };
+  if (mockApi) {
+    await viaMock((mock) => mock.saveChatMessages(chatId, body));
+    return;
+  }
+  await requestJson("PUT", `/api/chats/${chatId}/messages`, body);
 }
 
 function withCardDefaults(card: ResultCard): ResultCard {
@@ -298,6 +359,12 @@ export async function getProduct(productId: string, sessionId?: string): Promise
   };
 }
 
+/** POST /api/products/{id}/looks: outfits around a catalogue product, from Gemini and our catalogue. */
+export async function getLooks(productId: string, request: LooksRequest): Promise<Looks> {
+  if (mockApi) return viaMock((mock) => mock.getLooks(productId, request));
+  return requestJson<Looks>("POST", `/api/products/${encodeURIComponent(productId)}/looks`, request);
+}
+
 /** POST /api/feedback: likes, saves and purchases teach the agent the shopper's style. */
 export async function sendFeedback(sessionId: string, productId: string, action: FeedbackAction): Promise<void> {
   const body: FeedbackRequest = { session_id: sessionId, product_id: productId, action };
@@ -313,6 +380,36 @@ export async function checkout(productId: string, size: string | null): Promise<
   const body: CheckoutRequest = { product_id: productId, size };
   if (mockApi) return viaMock((mock) => mock.checkout(body));
   return requestJson<CheckoutResponse>("POST", "/api/checkout", body);
+}
+
+/** POST /api/orders: places a demo-store order (no payment, nothing delivered); the server stamps the time. */
+export async function placeOrder(productId: string, size: string | null): Promise<DemoOrder> {
+  const body: OrderRequest = { product_id: productId, size };
+  const response = mockApi
+    ? await viaMock((mock) => mock.placeOrder(body))
+    : await requestJson<OrderResponse>("POST", "/api/orders", body);
+  return response.order;
+}
+
+/** GET /api/orders: the shopper's demo orders, newest first. */
+export async function getOrders(): Promise<DemoOrder[]> {
+  const response = mockApi ? await viaMock((mock) => mock.getOrders()) : await requestJson<OrderList>("GET", "/api/orders");
+  return response.orders;
+}
+
+/** DELETE /api/orders: forget every demo order. */
+export async function clearOrders(): Promise<void> {
+  if (mockApi) {
+    await viaMock((mock) => mock.clearOrders());
+    return;
+  }
+  await requestJson("DELETE", "/api/orders");
+}
+
+/** GET /api/suggestions/from-orders: catalogue products that go with the shopper's recent demo orders. */
+export async function getOrderSuggestions(gender: GenderFilter | null): Promise<OrderSuggestions> {
+  if (mockApi) return viaMock((mock) => mock.getOrderSuggestions());
+  return requestJson<OrderSuggestions>("GET", `/api/suggestions/from-orders${gender ? `?gender=${gender}` : ""}`);
 }
 
 /** GET /api/rules: the shopper's saved personal rules. */

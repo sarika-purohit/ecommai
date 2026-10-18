@@ -28,7 +28,7 @@ from google.cloud.firestore_v1.vector import Vector
 from google.genai import types
 from pydantic import BaseModel, Field, ValidationError
 
-from agent import delivery
+from agent import delivery, mix
 from agent.models import MustHave, NiceToHave, Product, ShoppingBrief
 from agent.tradeoffs import BUDGET_RAISE_PERCENT, DEADLINE_EXTRA_DAYS, raised_budget
 from data_prep import schemas
@@ -269,8 +269,9 @@ def find_candidates(
     """The `limit` closest products that pass the hard filters and the soft limits, closest first (ties: cheaper).
 
     With a reference photo, a second search uses the photo's embedding and each product keeps its best distance.
-    If the photo can't be read, the search goes on with the words alone. `timings`, when given, is filled with
-    milliseconds per stage.
+    If the photo can't be read, the search goes on with the words alone. With a colour mix from memory mode, each
+    colour gets its own search too and keeps its share of the `limit` places when it has enough products
+    (agent/mix.py). `timings`, when given, is filled with milliseconds per stage.
     """
     started = time.perf_counter()
     filters = hard_filters(brief)
@@ -292,25 +293,31 @@ def find_candidates(
     }
     if reference_image_url:
         searches["image"] = lambda: image_vector(embedder, reference_image_url, fetch)
+    shares = mix.shares(brief)
+    mixed = [nice.value for nice in brief.nice_to_haves if nice.weight and nice.attribute in mix.MIXED]
+    for n, colour in enumerate(mixed if shares else []):
+        one = search_text(mix.one_colour(brief, colour), query_text)
+        searches[f"colour{n}"] = lambda one=one: embed_query(embedder, one).values
     with ThreadPoolExecutor(max_workers=len(searches)) as pool:
         futures = {name: pool.submit(run, name, vector_of) for name, vector_of in searches.items()}
         text_results = futures["text"].result()
         image_results = _photo_results(futures.get("image"), reference_image_url)
+        colour_results = [item for name, future in futures.items() if name.startswith("colour") for item in future.result()]
 
     clock = time.perf_counter()
-    hits = _within_limits(brief, merge(text_results, image_results), now)
+    hits = _within_limits(brief, merge(text_results, image_results, colour_results), now)
     hits.sort(key=lambda hit: (hit.distance, hit.total_price, hit.product.id))
     stages["limits_ms"] = _ms_since(clock)
     stages["total_ms"] = _ms_since(started)
     log.info(
         "find_candidates %s: %d found, %d within limits, %d returned, %s",
         brief.category,
-        len(text_results) + len(image_results),
+        len(text_results) + len(image_results) + len(colour_results),
         len(hits),
         min(limit, len(hits)),
         {name: round(ms) for name, ms in stages.items()},
     )
-    return hits[:limit]
+    return mix.pick(hits, lambda hit: mix.product_family(hit.product), shares, limit)
 
 
 def _photo_results(future: Any, url: str | None) -> list[tuple[Product, float]]:

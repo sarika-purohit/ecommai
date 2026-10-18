@@ -7,7 +7,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { CheckIcon, StoreIcon } from "@/components/icons";
 import { ScreenPlaceholder } from "@/components/NoSession";
-import { getProduct } from "@/lib/api";
+import { CompleteTheLook } from "@/components/product/CompleteTheLook";
+import { getProduct, placeOrder } from "@/lib/api";
 import { canRetry, errorMessage } from "@/lib/errors";
 import { rupees, shortDay } from "@/lib/format";
 import { clearSearch, findCard, resultsStore, sessionStore } from "@/lib/session";
@@ -17,8 +18,6 @@ import type { ProductDetails, ShoppingBrief } from "@/lib/types";
 
 const text = strings.checkout;
 const ONE_SIZE = "One size";
-/** Stands in for the store taking the order. */
-const PLACING_MS = 900;
 
 type Load = { status: "loading" } | { status: "ready"; product: ProductDetails } | { status: "error"; message: string; retryable: boolean };
 type Payment = "online" | "cod";
@@ -109,6 +108,7 @@ function Order({ product, size, brief }: { product: ProductDetails; size: string
   const [payment, setPayment] = useState<Payment>(codAvailable && wantsCod(brief) ? "cod" : "online");
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(false);
+  const [placeError, setPlaceError] = useState<string | null>(null);
   const placedHeading = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
   const paymentName = useId();
@@ -124,12 +124,17 @@ function Order({ product, size, brief }: { product: ProductDetails; size: string
     if (placed) placedHeading.current?.focus();
   }, [placed]);
 
-  function place() {
+  async function place() {
     setPlacing(true);
-    window.setTimeout(() => {
-      setPlacing(false);
+    setPlaceError(null);
+    try {
+      await placeOrder(product.id, size);
       setPlaced(true);
-    }, PLACING_MS);
+    } catch (caught) {
+      setPlaceError(errorMessage(caught));
+    } finally {
+      setPlacing(false);
+    }
   }
 
   if (placed) {
@@ -152,6 +157,12 @@ function Order({ product, size, brief }: { product: ProductDetails; size: string
             {strings.results.newSearch}
           </Link>
         </div>
+        {product.source === "catalog" ? (
+          <div className="mt-6 flex flex-col gap-3">
+            <hr className="stitch" />
+            <CompleteTheLook product={product} gender={null} />
+          </div>
+        ) : null}
       </section>
     );
   }
@@ -209,7 +220,12 @@ function Order({ product, size, brief }: { product: ProductDetails; size: string
         <span className="demo-badge">{strings.card.demo(product.price?.demo ?? true)}</span>
       </p>
 
-      <button type="button" className="btn btn-primary w-full" onClick={place} disabled={placing} aria-busy={placing}>
+      {placeError ? (
+        <p role="alert" className="field-error">
+          {placeError}
+        </p>
+      ) : null}
+      <button type="button" className="btn btn-primary w-full" onClick={() => void place()} disabled={placing} aria-busy={placing}>
         {placing ? text.placing : text.place}
       </button>
     </section>

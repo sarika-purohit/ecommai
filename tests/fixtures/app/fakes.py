@@ -82,7 +82,12 @@ class FakeDocument:
             else:
                 names = list(data) if merge is True else merge
                 for name in names:
-                    current[name] = copy.deepcopy(data[name])
+                    # A dotted name is a field inside a map: "timestamps.updated_at".
+                    source, target = data, current
+                    *parents, leaf = name.split(".")
+                    for parent in parents:
+                        source, target = source[parent], target.setdefault(parent, {})
+                    target[leaf] = copy.deepcopy(source[leaf])
 
     def delete(self) -> None:
         with self.db.lock:

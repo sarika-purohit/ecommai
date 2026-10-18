@@ -11,11 +11,9 @@ const text = strings.pincode;
 interface PincodeCardProps {
   pincode: string | null;
   inputRef: RefObject<HTMLInputElement | null>;
-  /** Set by the home screen when a search is started before the pincode is saved. */
-  required: boolean;
 }
 
-export function PincodeCard({ pincode, inputRef, required }: PincodeCardProps) {
+export function PincodeCard({ pincode, inputRef }: PincodeCardProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [invalid, setInvalid] = useState(false);
@@ -54,7 +52,7 @@ export function PincodeCard({ pincode, inputRef, required }: PincodeCardProps) {
     );
   }
 
-  const error = invalid ? text.invalid : required ? text.required : null;
+  const error = invalid ? text.invalid : null;
 
   return (
     <form onSubmit={save} className="panel p-5" noValidate>

@@ -15,21 +15,37 @@ import type {
   CatalogPage,
   CatalogQuery,
   CategoryCount,
+  ChatMessagesBody,
+  ChatProduct,
+  ChatSummary,
   Check,
   CheckoutRequest,
   CheckoutResponse,
+  DemoOrder,
   DetailValue,
   Evidence,
   FeedbackRequest,
   GenderFilter,
+  Look,
+  LookPart,
+  Looks,
+  LookSlot,
+  LooksRequest,
+  LookSuggestion,
   Me,
   MeUpdate,
   MustHave,
   NiceToHave,
   OkResponse,
+  OpenChatResponse,
+  OrderList,
+  OrderRequest,
+  OrderResponse,
+  OrderSuggestions,
   ProductDetails,
   ResultCard,
   RulesBody,
+  SavedChat,
   SearchEvent,
   SearchSource,
   ShoppingBrief,
@@ -316,11 +332,12 @@ function newBrief(input: BriefInput, category: string): ShoppingBrief {
     budget_max_inr: budgetFrom(text),
     min_rating: null,
     deadline_date: deadlineFrom(text),
-    pincode: input.pincode,
+    pincode: input.pincode ?? loadProfile().pincode,
     size: null,
     reference_image_url: typeof input.image === "string" ? input.image : null,
     language: input.language,
     missing: [],
+    remembered: [],
     not_checkable: brandsIn(text),
     question: null,
   };
@@ -362,7 +379,8 @@ export async function createBrief(input: BriefInput): Promise<BriefResponse> {
   };
   const id = `mock-${Date.now().toString(36)}`;
   saveSession(id, session);
-  return { session_id: id, brief: session.brief, question: session.brief.question };
+  if (input.chat_id) keepInChat(input.chat_id, id, session, text);
+  return { session_id: id, brief: session.brief, question: session.brief.question, product: productName(session.brief.category) };
 }
 
 // ---------- Editing a brief ----------
@@ -471,6 +489,8 @@ function applyChange(session: MockSession, change: BriefChange): MockSession {
       return { ...session, brief: { ...brief, size: change.size, missing: brief.missing.filter((m) => m !== "size") } };
     case "set_source":
       return { ...session, source: change.source };
+    case "set_memory":
+      return session;
     case "set_min_rating":
       return { ...session, brief: { ...brief, min_rating: change.min_rating } };
     case "answer":
@@ -480,11 +500,23 @@ function applyChange(session: MockSession, change: BriefChange): MockSession {
   }
 }
 
-export async function updateBrief(sessionId: string, change: BriefChange): Promise<BriefUpdateResponse> {
+/** The words a change adds to what the shopper has said, as the agent keeps them. */
+function wordsOf(change: BriefChange): string {
+  if (change.type === "text") return change.text;
+  if (change.type === "answer") return change.answer;
+  return change.type === "add_must_have" ? change.text : "";
+}
+
+/** The chat's other products aren't switched between here: every change edits the session it was sent for. */
+export async function updateBrief(sessionId: string, change: BriefChange, chatId?: string): Promise<BriefUpdateResponse> {
   await sleep(350);
   const next = applyChange(getSession(sessionId), change);
   saveSession(sessionId, next);
-  return { brief: next.brief };
+  if (chatId) {
+    const said = [chatRecord(chatId)?.queryTexts[sessionId] ?? "", wordsOf(change)].filter(Boolean).join(". ");
+    keepInChat(chatId, sessionId, next, said);
+  }
+  return { session_id: sessionId, brief: next.brief, product: productName(next.brief.category) };
 }
 
 // ---------- Labels, as agent/rules.py writes them ----------
@@ -1291,4 +1323,307 @@ function countCategories(products: CatalogProduct[]): CategoryCount[] {
 export async function getCategories(gender: GenderFilter | null): Promise<CategoryCount[]> {
   await sleep(100);
   return countCategories([...KURTAS, ...WATCHES].filter((p) => !gender || p.gender === gender || p.gender === "unisex"));
+}
+
+// ---------- Complete the look ----------
+
+const LOOK_WEIGHTS = { colour: 25, style: 25, occasion: 20, silhouette: 15, preferences: 10, budget: 5 };
+
+/** A stand-in for agent/outfit.py on the small mock catalogue (kurtas and watches): fixed scores, no Gemini. */
+export async function getLooks(productId: string, request: LooksRequest): Promise<Looks> {
+  await sleep(700);
+  const all = [...KURTAS, ...WATCHES];
+  const anchor = all.find((product) => product.id === productId);
+  if (!anchor) throw new MockNotFound();
+  const slot: LookSlot = anchor.articleType === "Watches" ? "top" : "watch";
+  const room = request.budget_max_inr ? request.budget_max_inr - anchor.price.selling : null;
+  const fits = all.filter(
+    (product) =>
+      product.articleType !== anchor.articleType &&
+      (anchor.gender === "unisex" || product.gender === anchor.gender || product.gender === "unisex") &&
+      (room === null || product.price.selling <= room),
+  );
+  const suggestions = fits.slice(0, 4).map((product, index): LookSuggestion => {
+    const parts: LookPart[] = [
+      { name: "colour", weight: LOOK_WEIGHTS.colour, score: 0.9 - index * 0.1 },
+      { name: "style", weight: LOOK_WEIGHTS.style, score: 0.8 - index * 0.05 },
+      { name: "occasion", weight: LOOK_WEIGHTS.occasion, score: 0.8 },
+      { name: "silhouette", weight: LOOK_WEIGHTS.silhouette, score: 0.7 },
+      { name: "preferences", weight: LOOK_WEIGHTS.preferences, score: null },
+      { name: "budget", weight: LOOK_WEIGHTS.budget, score: room === null ? null : 1 },
+    ];
+    const known = parts.filter((part) => part.score !== null);
+    const match = Math.round((100 * known.reduce((sum, part) => sum + part.weight * (part.score ?? 0), 0)) / known.reduce((sum, part) => sum + part.weight, 0));
+    return { slot, product: catalogItem(product), match, parts, reason: "Mock styling note: the real agent asks Gemini." };
+  });
+  const occasion = request.occasion ?? (anchor.usage === "Ethnic" ? "festive" : "casual");
+  const looks: Look[] = suggestions.length
+    ? [
+        {
+          occasion,
+          title: "Sample look",
+          summary: "Mock mode: a fixed example, not a styling opinion.",
+          pieces: [{ slot, choices: suggestions }],
+          ideas: anchor.articleType === "Watches" ? [] : ["a light dupatta"],
+          total_price: anchor.price.selling + fits[0].price.selling,
+          left_out: [],
+        },
+      ]
+    : [];
+  return {
+    product_id: anchor.id,
+    looks,
+    rows: suggestions.length ? [{ kind: slot === "top" ? "pair" : "accessories", items: suggestions }] : [],
+    weights: LOOK_WEIGHTS,
+    budget_max_inr: request.budget_max_inr ?? null,
+    sample_data: true,
+    demo_prices: true,
+    note: looks.length ? null : "We couldn't find products in our catalogue that go with this one.",
+  };
+}
+
+// ---------- Saved chats ----------
+// Stored in localStorage as the agent's chats/{id} documents are, with the same time rules (agent/chats.py): a
+// product's updated_at moves only when the shopper chats about it. The searches the products point to are kept
+// beside the chat, because the sessions themselves last only while the tab is open.
+
+const CHATS_KEY = "ecommai.mock.chats";
+const KEEP_DAYS = 90;
+const KEEP_CHATS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_TITLE = 80;
+
+interface MockChatRecord {
+  chat: SavedChat;
+  sessions: Record<string, MockSession>;
+  queryTexts: Record<string, string>;
+}
+
+const PRODUCT_NAMES: Record<string, string> = {
+  Kurtas: "kurta",
+  Kurtis: "kurti",
+  Tunics: "tunic",
+  Shirts: "shirt",
+  Tshirts: "t-shirt",
+  Tops: "top",
+  Jeans: "jeans",
+  Trousers: "trousers",
+  "Casual Shoes": "casual shoes",
+  "Sports Shoes": "sports shoes",
+  "Formal Shoes": "formal shoes",
+  Watches: "watch",
+  Handbags: "handbag",
+  Backpacks: "backpack",
+  Clutches: "clutch",
+  Sunglasses: "sunglasses",
+};
+
+function productName(category: string): string | null {
+  return PRODUCT_NAMES[category] ?? null;
+}
+
+function loadChats(): Record<string, MockChatRecord> {
+  return readJson<Record<string, MockChatRecord>>(browserStorage("local"), CHATS_KEY) ?? {};
+}
+
+function chatRecord(chatId: string): MockChatRecord | null {
+  return loadChats()[chatId] ?? null;
+}
+
+function saveChatRecord(record: MockChatRecord) {
+  writeJson(browserStorage("local"), CHATS_KEY, { ...loadChats(), [record.chat.chat_id]: record });
+}
+
+function newChatRecord(chatId: string, moment: string): MockChatRecord {
+  const chat: SavedChat = {
+    chat_id: chatId,
+    title: "",
+    timestamps: { created_at: moment, updated_at: moment, last_opened_at: moment },
+    messages: [],
+    pending: null,
+    products: [],
+  };
+  return { chat, sessions: {}, queryTexts: {} };
+}
+
+function mustHaveForm(mustHave: MustHave): unknown {
+  switch (mustHave.rule) {
+    case "is":
+      return mustHave.value;
+    case "is_not":
+      return { not: mustHave.value };
+    case "present":
+    case "absent":
+      return mustHave.rule === "present";
+    case "at_most":
+      return { at_most: Number(mustHave.value) };
+    case "at_least":
+      return { at_least: Number(mustHave.value) };
+  }
+}
+
+function joined(forms: unknown[]): unknown {
+  return forms.length === 1 ? forms[0] : forms;
+}
+
+/** The brief as a product's filters, as agent/chats.py writes them: colour, gender, size, the rest, then the limits. */
+function chatFilters(brief: ShoppingBrief, source: SearchSource): Record<string, unknown> {
+  const ownSize = ["Handbags", "Backpacks", "Clutches"].includes(brief.category);
+  const forms = new Map<string, unknown[]>();
+  for (const mustHave of brief.must_haves) {
+    if (mustHave.from_rule) continue;
+    forms.set(mustHave.attribute, [...(forms.get(mustHave.attribute) ?? []), mustHaveForm(mustHave)]);
+  }
+  const take = (attribute: string): unknown[] | undefined => {
+    const found = forms.get(attribute);
+    forms.delete(attribute);
+    return found;
+  };
+  const filters: Record<string, unknown> = {};
+  const colour = take("colour");
+  if (colour) filters.colour = joined(colour);
+  if (brief.gender) filters.gender = brief.gender;
+  const ownSizes = ownSize ? take("size") : undefined;
+  if (ownSizes) filters.size = joined(ownSizes);
+  else if (!ownSize && brief.size) filters.size = brief.size;
+  for (const [attribute, found] of forms) filters[attribute] = joined(found);
+  if (brief.budget_max_inr !== null) filters.budget_max_inr = brief.budget_max_inr;
+  if (brief.min_rating !== null) filters.min_rating = brief.min_rating;
+  if (brief.deadline_date) filters.deadline_date = brief.deadline_date;
+  if (brief.nice_to_haves.length > 0) {
+    const prefer = new Map<string, unknown[]>();
+    for (const nice of brief.nice_to_haves) prefer.set(nice.attribute, [...(prefer.get(nice.attribute) ?? []), nice.value]);
+    filters.prefer = Object.fromEntries([...prefer].map(([attribute, values]) => [attribute, joined(values)]));
+  }
+  filters.source = source;
+  return filters;
+}
+
+/** Saves this search as its product's entry in the chat. Only this product's updated_at moves, and the chat's. */
+function keepInChat(chatId: string, sessionId: string, session: MockSession, queryText: string) {
+  const name = productName(session.brief.category);
+  const moment = new Date().toISOString();
+  const record = chatRecord(chatId) ?? newChatRecord(chatId, moment);
+  if (name && !session.brief.missing.includes("product")) {
+    const old = record.chat.products.find((p) => p.product === name);
+    const entry: ChatProduct = {
+      product: name,
+      timestamps: { created_at: old?.timestamps.created_at ?? moment, updated_at: moment },
+      filters: chatFilters(session.brief, session.source ?? "catalog"),
+      session_id: sessionId,
+    };
+    record.chat.products = old ? record.chat.products.map((p) => (p.product === name ? entry : p)) : [...record.chat.products, entry];
+    record.chat.timestamps.updated_at = moment;
+    record.sessions[sessionId] = session;
+    record.queryTexts[sessionId] = queryText;
+  }
+  saveChatRecord(record);
+}
+
+function titleOf(text: string): string {
+  const words = text.split(/\s+/).filter(Boolean).join(" ");
+  if (words.length <= MAX_TITLE) return words;
+  return `${words.slice(0, MAX_TITLE).replace(/\s+\S*$/, "").replace(/[ ,.;:]+$/, "")}…`;
+}
+
+export async function saveChatMessages(chatId: string, body: ChatMessagesBody): Promise<OkResponse> {
+  const moment = new Date().toISOString();
+  const record = chatRecord(chatId) ?? newChatRecord(chatId, moment);
+  const chat = record.chat;
+  const changed = JSON.stringify([chat.messages, chat.pending]) !== JSON.stringify([body.messages, body.pending]);
+  chat.messages = body.messages;
+  chat.pending = body.pending;
+  if (!chat.title) chat.title = titleOf(body.messages.find((m) => m.role === "user")?.text ?? "");
+  if (changed) chat.timestamps.updated_at = moment;
+  saveChatRecord(record);
+  return { ok: true };
+}
+
+export async function listChats(): Promise<{ chats: ChatSummary[] }> {
+  const all = Object.values(loadChats()).sort((a, b) => b.chat.timestamps.updated_at.localeCompare(a.chat.timestamps.updated_at));
+  const oldest = Date.now() - KEEP_DAYS * DAY_MS;
+  const kept = all.slice(0, KEEP_CHATS).filter((r) => Date.parse(r.chat.timestamps.updated_at) >= oldest);
+  const left = Object.fromEntries(kept.map((r) => [r.chat.chat_id, r]));
+  if (kept.length < all.length) writeJson(browserStorage("local"), CHATS_KEY, left);
+  return {
+    chats: kept.map(({ chat }) => ({
+      chat_id: chat.chat_id,
+      title: chat.title,
+      timestamps: chat.timestamps,
+      products: chat.products.map((p) => p.product),
+    })),
+  };
+}
+
+/** Results aren't kept here, so a reopened chat always searches again. */
+export async function openChat(chatId: string, product?: string): Promise<OpenChatResponse> {
+  await sleep(150);
+  const record = chatRecord(chatId);
+  if (!record) throw new MockNotFound();
+  const { chat } = record;
+  const welcomeBack = Date.now() - Date.parse(chat.timestamps.last_opened_at) > DAY_MS;
+  const entries = [...chat.products].sort((a, b) => b.timestamps.updated_at.localeCompare(a.timestamps.updated_at));
+  const entry = entries.find((p) => p.product === product) ?? entries[0];
+  const session = entry ? record.sessions[entry.session_id] : undefined;
+  if (entry && session) saveSession(entry.session_id, session);
+  chat.timestamps.last_opened_at = new Date().toISOString();
+  saveChatRecord(record);
+  return {
+    chat,
+    welcome_back: welcomeBack,
+    active:
+      entry && session
+        ? {
+            product: entry.product,
+            session_id: entry.session_id,
+            brief: session.brief,
+            source: session.source ?? "catalog",
+            query_text: record.queryTexts[entry.session_id] ?? "",
+            results: null,
+          }
+        : null,
+  };
+}
+
+// ---------- Demo orders ----------
+
+let mockOrders: DemoOrder[] = [];
+
+export async function placeOrder(request: OrderRequest): Promise<OrderResponse> {
+  await sleep(300);
+  const product = [...KURTAS, ...WATCHES].find((p) => p.id === request.product_id);
+  if (!product) throw new MockNotFound();
+  const order: DemoOrder = {
+    id: `mock-${mockOrders.length + 1}`,
+    product_id: product.id,
+    title: product.title,
+    article_type: product.articleType,
+    gender: product.gender,
+    base_colour: product.baseColour ?? null,
+    usage: product.usage ?? null,
+    size: request.size,
+    price_inr: product.price.selling,
+    ordered_at: new Date().toISOString(),
+    source: "demo_catalog",
+    seeded: false,
+  };
+  mockOrders = [order, ...mockOrders];
+  return { order };
+}
+
+export async function getOrders(): Promise<OrderList> {
+  await sleep(200);
+  return { orders: mockOrders };
+}
+
+export async function clearOrders(): Promise<OkResponse> {
+  await sleep(200);
+  mockOrders = [];
+  return { ok: true };
+}
+
+/** The mock catalogue is too small for suggestions that go with orders: always empty. */
+export async function getOrderSuggestions(): Promise<OrderSuggestions> {
+  await sleep(200);
+  return { items: [], ideas: [], note: null, sample_data: true, demo_orders: true };
 }

@@ -267,3 +267,12 @@ export function StarIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function HistoryIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5" />
+      <path d="M4 4v4.5h4.5M12 8v4.2l2.8 1.8" />
+    </Icon>
+  );
+}

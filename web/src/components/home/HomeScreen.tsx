@@ -30,7 +30,6 @@ export function HomeScreen() {
   const [waitingForPhoto, setWaitingForPhoto] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pincodeRequired, setPincodeRequired] = useState(false);
 
   const requestId = useId();
   const hintId = useId();
@@ -54,11 +53,6 @@ export function HomeScreen() {
 
   async function start(requestText: string, image: File | null) {
     const trimmed = requestText.trim();
-    if (!pincode) {
-      setPincodeRequired(true);
-      pincodeRef.current?.focus();
-      return;
-    }
     if (!trimmed && !image) {
       setError(text.emptyRequest);
       requestRef.current?.focus();
@@ -130,7 +124,7 @@ export function HomeScreen() {
     <>
       <AppHeader />
       <main className="shell flex flex-col gap-6 pb-10 pt-2">
-        {!pincode ? <PincodeCard pincode={null} inputRef={pincodeRef} required={pincodeRequired} /> : null}
+        {!pincode ? <PincodeCard pincode={null} inputRef={pincodeRef} /> : null}
 
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <h1 className="display text-[2.25rem] sm:text-[2.75rem]">
@@ -206,7 +200,7 @@ export function HomeScreen() {
 
         {pincode ? (
           <div className="-mt-3">
-            <PincodeCard pincode={pincode} inputRef={pincodeRef} required={false} />
+            <PincodeCard pincode={pincode} inputRef={pincodeRef} />
           </div>
         ) : null}
 

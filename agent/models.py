@@ -45,6 +45,7 @@ class MustHave(BaseModel):
 class NiceToHave(BaseModel):
     attribute: str
     value: str | bool | float
+    weight: float | None = Field(default=None, gt=0, le=1, description="Memory mode's share in a colour mix (agent/mix.py)")
 
 
 class ShoppingBrief(BaseModel):
@@ -65,6 +66,9 @@ class ShoppingBrief(BaseModel):
         default_factory=list, description="Wishes we can't check yet, such as a brand; shown to the shopper"
     )
     question: str | None = Field(default=None, description="At most one question, only when the answer changes the results")
+    remembered: list[str] = Field(
+        default_factory=list, description="Filters that came from the shopper's past chats, not their words (agent/memory.py)"
+    )
 
     @field_validator("must_haves")
     @classmethod

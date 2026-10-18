@@ -44,7 +44,7 @@ from google.genai import errors, types
 from pydantic import BaseModel, Field, ValidationError, create_model
 
 from agent import brief as briefs
-from agent import delivery, verify, web_search
+from agent import delivery, mix, verify, web_search
 from agent.cards import ResultCard, result_card
 from agent.learn import TasteProfile, vectors
 from agent.models import Check, Evidence, MustHave, Product, Rule, ShoppingBrief, Status, Verification
@@ -320,6 +320,8 @@ def search(
 
     clock = time.perf_counter()
     kept, dropped = quick_check(brief, hits)
+    # A colour mix from memory mode takes turns by share, so the careful check isn't all the closest colour.
+    kept = mix.interleave(kept, lambda hit: mix.product_family(hit.product), mix.shares(brief))
     pool = kept[:CHECK_POOL]
     chosen = choose_for_check(pool)
     nearly = one_away(brief, dropped, CHECK_COUNT - len(chosen))
@@ -880,9 +882,14 @@ class SetSource(BaseModel):
     source: Source
 
 
+class SetMemory(BaseModel):
+    type: Literal["set_memory"]
+    enabled: bool
+
+
 BriefChange = Annotated[
     TextChange | AnswerChange | AddMustHave | EditMustHave | RemoveMustHave | SetRule | RemoveNiceToHave | SetBudget
-    | SetDeadline | SetPincode | SetSize | SetMinRating | SetSource,
+    | SetDeadline | SetPincode | SetSize | SetMinRating | SetSource | SetMemory,
     Field(discriminator="type"),
 ]
 GEMINI_CHANGES = (TextChange, AnswerChange, AddMustHave)

@@ -691,9 +691,12 @@ class Verification(BaseModel):
 | Endpoint | Input | Output |
 |---|---|---|
 | `GET /health` (and `/healthz`) | — | `{ ok: true }`. Cloud Run reserves some paths ending in "z", so health checks use `/health` |
-| `POST /api/brief` | `{ text?, image_url?, image_base64?, image_mime_type?, pincode, language, source? }`. `source` is `live` (default) or `catalog` | `{ session_id, brief, question }`. An unknown pincode is a 400 with a friendly message |
+| `POST /api/brief` | `{ text?, image_url?, image_base64?, image_mime_type?, pincode, language, source?, chat_id?, memory? }`. `memory: true` fills what the shopper left open from their other chats about the same product (`brief.remembered` names it). `source` is `live` (default) or `catalog`. `chat_id` (`c_` + 32 hex) saves the product in that chat | `{ session_id, brief, question, product }`. `product` is the plain name ("kurta"), or null while the type is a guess. An unknown pincode is a 400 with a friendly message; another shopper's chat is a 404 |
 | `GET /.well-known/ucp` | — | Our UCP agent profile (public), which Shopify reads when we search live stores |
-| `POST /api/brief/update` | `{ session_id, change }`. `change` is one of: `text`, `answer`, `add_must_have` (these three go to Gemini), or `edit_must_have`, `remove_must_have`, `set_rule` (switch a saved rule off for this search), `remove_nice_to_have`, `set_budget`, `set_deadline`, `set_pincode`, `set_size` (applied in code) | `{ brief }` |
+| `POST /api/brief/update` | `{ session_id, change }`. `change` is one of: `text`, `answer`, `add_must_have` (these three go to Gemini), or `edit_must_have`, `remove_must_have`, `set_rule` (switch a saved rule off for this search), `remove_nice_to_have`, `set_budget`, `set_deadline`, `set_pincode`, `set_size`, `set_memory { enabled }` (memory off forgets the remembered filters, on fills them again) (applied in code). `memory?` lets a forked product use its own memory. `chat_id?` keeps the chat's product entry up to date; a change to another product in that chat moves to that product's search (or forks a new one) | `{ session_id, brief, product }`. `session_id` differs from the one sent when the chat moved to another product |
+| `PUT /api/chats/{chat_id}/messages` | `{ messages[], pending }`. Creates the chat if needed; sets the title from the first message | `{ ok }` |
+| `GET /api/chats` | — | `{ chats: [{ chat_id, title, timestamps, products[] }] }`, newest first. Deletes chats untouched for 90 days and any beyond the newest 30 |
+| `POST /api/chats/{chat_id}/open` | `{ product? }` | `{ chat, welcome_back, active }`. `active` is `{ product, session_id, brief, source, query_text, results }`; `results` only for a catalogue search under 24 hours old, else null and the app searches again |
 | `POST /api/search` | `{ session_id }` | Stream, see below |
 | `GET /api/products/{id}?session_id=` | — | The product (no embedding) plus the tick-list for that search's checklist, and `sizes_in_stock` |
 | `GET /api/me`, `PUT /api/me`, `DELETE /api/me` | `{ pincode?, language? }` | `{ name, email, pincode, language, rules, has_taste }`. DELETE removes the shopper, their searches and uploads |
@@ -707,6 +710,8 @@ class Verification(BaseModel):
 | `GET /api/share/{id}` | — | The shared shortlist with tick-lists (no sign-in needed) |
 | `POST /api/feedback` | `{ session_id, product_id, action }` | `{ ok }` |
 | `POST /api/checkout` | `{ product_id, size }` | `{ redirect_url }` |
+| `POST /api/orders`, `GET /api/orders`, `DELETE /api/orders` | `{ product_id, size }` | `{ order }`, `{ orders }` (newest first), `{ ok }`. Demo-store "Place demo order" only (catalogue products; a live id is 400): no payment, nothing delivered. Saved in `users/{uid}.orders[]` (`id, product_id, title, article_type, gender, base_colour, usage, size, price_inr, ordered_at` (server time), `source: demo_catalog`, `seeded`); at most 50, none over 365 days. Placing one warms the product's complete-the-look cache in the background. "Buy" taps on live stores are not orders |
+| `GET /api/suggestions/from-orders?gender=` | — | `{ items[{ product, slot, match, reason, goes_with[] }], ideas[{ goes_with_title, text }], note, sample_data, demo_orders }`. Complete-the-look rows of the top 3 recent orders, combined (`agent/purchases.py`: 60-day half-life, frequency-weighted anchors, noisy-or score). No orders: empty, no Gemini call. Ideas (pyjama, juttis, leggings, dupatta) are never products. Seed a demo with `python -m scripts.seed_demo_orders --device <id> --order <product_id>:<days_ago>` |
 | `/mcp` | MCP over Streamable HTTP | Tools for other AI apps |
 | `/.well-known/agent-card.json`, `/a2a` | A2A | Our agent for Gemini Enterprise and others |
 
@@ -793,6 +798,7 @@ users/{userId}                         // userId = the shopper's Firebase sign-i
   pincode, language, rules [ MustHave ], sizes { <brand>: <size> }
   taste { <articleType>: { vector, count } }   // running average embedding of liked, saved and bought products
   likes [ ... ], dislikes [ ... ], watches [ ... ]
+  orders [ Order ]                     // demo-store orders only, at most 50 and under a year old
 
 sessions/{sessionId}
   userId, brief, history, results, feedback
@@ -807,6 +813,16 @@ checks/{productId}__{attribute}__{rule}__{value}   // saved careful-check result
   raw_answer, changed_by_code               // Gemini's own answer, and why code rules changed it (if they did)
   version                                   // prompt and rules version; older results are re-checked
   expires_at                                // live products only (doc id "shopify_<hash>"): deleted after 24 hours by a Firestore expiry policy
+
+chats/{chatId}                         // one saved AI chat; see agent/chats.py
+  user_id, chat_id, title
+  timestamps { created_at, updated_at, last_opened_at }   // set by the server; updated_at moves when messages or a product entry change
+  messages [ { id, role, text, error?, product?, tradeoffs?, picks? } ]   // no timestamps
+  pending                              // words kept until the product type is known
+  products [ { product, timestamps { created_at, updated_at }, filters, remembered, session_id } ]   // one per product name; updated_at moves only when the shopper chats about it
+                                       // filters: readable flat JSON written by the server from the session's brief (colour, gender, size, other must-haves, budget_max_inr, min_rating, deadline_date, prefer, source); personal rules left out; remembered = the filters keys memory filled in
+
+                                       // Memory mode (agent/memory.py): a new search is filled from the same user's OTHER chats' entries for the SAME product only. Each entry counts 0.5^(age_days/30) by its updated_at; per key the heaviest value wins and an exact tie gives nothing. deadline_date, source, prefer and keys the entry itself had remembered are never used. Only what the brief leaves open is filled, and invalid values are skipped.
 
 shares/{shareId}
   product_ids, brief, created_at       // opens without sign-in

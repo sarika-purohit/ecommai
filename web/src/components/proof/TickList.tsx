@@ -38,6 +38,7 @@ export function TickList({ ticks, brief, photo, live = false, store = null, from
 
   return (
     <div>
+      <MatchSummary ticks={ticks} />
       <ul className="flex flex-wrap gap-2" aria-label={strings.card.mustHaves}>
         {ticks.map((tick) => {
           const label = tickLabel(tick, brief);
@@ -81,6 +82,22 @@ export function TickList({ ticks, brief, photo, live = false, store = null, from
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** Match % = must-haves proven ÷ must-haves asked for. "Not sure" counts as not proven, never as half. */
+function MatchSummary({ ticks }: { ticks: Tick[] }) {
+  if (ticks.length === 0) return null;
+  const count = (status: Status) => ticks.filter((tick) => tick.status === status).length;
+  const proven = count("pass");
+  const parts = [text.matchWhy(proven, ticks.length)];
+  if (count("unclear") > 0) parts.push(text.matchUnsure(count("unclear")));
+  if (count("fail") > 0) parts.push(text.matchMissing(count("fail")));
+  return (
+    <p className="mb-2 tabular-nums">
+      <span className="font-semibold">{text.match(Math.round((proven / ticks.length) * 100))}</span>
+      <span className="text-ink-soft"> · {parts.join(" · ")}</span>
+    </p>
   );
 }
 

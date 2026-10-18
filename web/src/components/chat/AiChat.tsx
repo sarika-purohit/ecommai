@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import { EditableTag } from "@/components/EditableTag";
-import { PincodeCard } from "@/components/home/PincodeCard";
-import { CameraIcon, CloseIcon, SendIcon, SparkleIcon } from "@/components/icons";
+import { CameraIcon, CloseIcon, HistoryIcon, SendIcon, SparkleIcon } from "@/components/icons";
 import { SourceChoice } from "@/components/SourceChoice";
 import { Tag } from "@/components/Tag";
 import {
@@ -15,19 +14,25 @@ import {
   chatOpenStore,
   chatSource,
   chatStore,
+  memoryStore,
   needsProduct,
   newChat,
+  openSavedChat,
+  restoreChat,
   sendMessage,
   setChatSource,
+  setMemory,
   type AiProgress,
   type ChatMessage,
 } from "@/lib/chat";
-import { rupees, shortDay } from "@/lib/format";
-import { categoryLabel, mustHaveLabel, niceToHaveLabel } from "@/lib/labels";
-import { pincodeStore, resultsStore, sessionStore, sourceStore } from "@/lib/session";
+import { listChats } from "@/lib/api";
+import { addDays, dayInIndia, parseIsoDate, rupees, shortDay } from "@/lib/format";
+import { errorMessage } from "@/lib/errors";
+import { categoryLabel, mustHaveLabel, niceToHaveChip, niceToHaveLabel } from "@/lib/labels";
+import { resultsStore, sessionStore, sourceStore } from "@/lib/session";
 import { useIsClient } from "@/lib/stored";
 import { strings } from "@/lib/strings";
-import type { BriefChange, ShoppingBrief } from "@/lib/types";
+import type { BriefChange, ChatSummary, ShoppingBrief } from "@/lib/types";
 
 const text = strings.chat;
 
@@ -36,6 +41,9 @@ export function AiChat() {
   const isClient = useIsClient();
   const open = chatOpenStore.use() ?? false;
   const progress = aiProgressStore.use();
+  useEffect(() => {
+    if (isClient) void restoreChat();
+  }, [isClient]);
   if (!isClient) return null;
   return open ? (
     <ChatPanel />
@@ -61,18 +69,19 @@ function ChatPanel() {
   const session = sessionStore.use();
   const results = resultsStore.use();
   const progress = aiProgressStore.use();
-  const pincode = pincodeStore.use();
   const source = sourceStore.use() ?? chatSource();
+  const memoryOn = memoryStore.use() ?? true;
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<Photo | null>(null);
+  const [showPast, setShowPast] = useState(false);
   const titleId = useId();
   const inputId = useId();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const pincodeRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const messages = chat?.messages ?? [];
+  const products = chat?.products ?? [];
   const mine = session && chat?.sessionId === session.sessionId ? session : null;
   const busy = progress !== null;
   const hasResults = Boolean(mine && results && results.sessionId === mine.sessionId);
@@ -97,7 +106,7 @@ function ChatPanel() {
   }, [photo]);
 
   function send(words: string) {
-    if (busy || !pincode || (!words.trim() && !photo)) return;
+    if (busy || (!words.trim() && !photo)) return;
     const file = photo?.file ?? null;
     setDraft("");
     setPhoto(null);
@@ -136,8 +145,43 @@ function ChatPanel() {
           <h2 id={titleId} className="display min-w-0 flex-1 truncate text-[1.375rem]">
             {text.title}
           </h2>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={memoryOn}
+            aria-label={text.memorySwitchLabel}
+            title={text.memorySwitchLabel}
+            className="btn btn-secondary btn-small min-h-10 gap-1.5 px-3 text-base"
+            disabled={busy}
+            onClick={() => void setMemory(!memoryOn)}
+          >
+            <HistoryIcon className="size-5" />
+            {text.memorySwitch}
+            <span
+              aria-hidden="true"
+              className={`relative h-5 w-9 rounded-full transition ${memoryOn ? "bg-indigo" : "bg-line-strong"}`}
+            >
+              <span className={`absolute top-0.5 size-4 rounded-full bg-white transition-all ${memoryOn ? "left-[1.125rem]" : "left-0.5"}`} />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-small min-h-10 px-3 text-base"
+            aria-label={showPast ? text.backToChat : text.pastChatsLabel}
+            aria-pressed={showPast}
+            onClick={() => setShowPast((now) => !now)}
+          >
+            {showPast ? text.backToChat : text.pastChats}
+          </button>
           {messages.length > 0 ? (
-            <button type="button" className="btn btn-secondary btn-small min-h-10 px-3 text-base" onClick={newChat}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-small min-h-10 px-3 text-base"
+              onClick={() => {
+                setShowPast(false);
+                newChat();
+              }}
+            >
               {text.newChat}
             </button>
           ) : null}
@@ -152,38 +196,65 @@ function ChatPanel() {
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          <div className="flex flex-col gap-3">
-            <SourceChoice value={source} onChange={(next) => void setChatSource(next)} disabled={busy} />
-            {!pincode ? (
-              <div>
-                <p className="mb-2 font-semibold">{text.needPincode}</p>
-                <PincodeCard pincode={null} inputRef={pincodeRef} required={false} />
-              </div>
-            ) : null}
+          {showPast ? (
+            <PastChats
+              disabled={busy}
+              onOpen={(chatId) => {
+                setShowPast(false);
+                void openSavedChat(chatId);
+              }}
+            />
+          ) : (
+            <div className="flex flex-col gap-3">
+              <SourceChoice value={source} onChange={(next) => void setChatSource(next)} disabled={busy} />
 
-            {messages.length === 0 ? (
-              <Intro disabled={busy || !pincode} onPick={send} />
-            ) : (
-              <ol className="flex flex-col gap-2.5" aria-live="polite">
-                {messages.map((message, index) => (
-                  <Message
-                    key={message.id}
-                    message={message}
-                    latest={index === messages.length - 1}
-                    disabled={busy || !pincode}
-                    onPick={send}
-                  />
-                ))}
-              </ol>
-            )}
-            {progress ? <Progress progress={progress} /> : null}
-            {hasResults && !busy ? (
-              <Link href="/results" className="link self-start" onClick={() => chatOpenStore.set(false)}>
-                {text.seeDetails}
-              </Link>
-            ) : null}
-            <div ref={endRef} />
-          </div>
+              {products.length >= 2 ? (
+                <ul aria-label={text.productsLabel} className="flex flex-wrap gap-1.5">
+                  {products.map((product) => (
+                    <li key={product}>
+                      <button
+                        type="button"
+                        className="chip min-h-9 px-3 text-base"
+                        aria-pressed={chat?.product === product}
+                        disabled={busy}
+                        onClick={() => chat && void openSavedChat(chat.chatId, product)}
+                      >
+                        {product}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {chat?.note ? (
+                <p className="bubble" data-role="ai" role="status">
+                  {chat.note}
+                </p>
+              ) : null}
+
+              {messages.length === 0 ? (
+                <Intro disabled={busy} onPick={send} />
+              ) : (
+                <ol className="flex flex-col gap-2.5" aria-live="polite">
+                  {messages.map((message, index) => (
+                    <Message
+                      key={message.id}
+                      message={message}
+                      latest={index === messages.length - 1}
+                      disabled={busy}
+                      onPick={send}
+                    />
+                  ))}
+                </ol>
+              )}
+              {progress ? <Progress progress={progress} /> : null}
+              {hasResults && !busy ? (
+                <Link href="/results" className="link self-start" onClick={() => chatOpenStore.set(false)}>
+                  {text.seeDetails}
+                </Link>
+              ) : null}
+              <div ref={endRef} />
+            </div>
+          )}
         </div>
 
         <div className="border-t border-line bg-card px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
@@ -232,7 +303,7 @@ function ChatPanel() {
               type="submit"
               className="flex size-12 flex-none items-center justify-center rounded-full bg-indigo text-white hover:bg-indigo-deep disabled:opacity-50"
               aria-label={text.send}
-              disabled={busy || !pincode || (!draft.trim() && !photo)}
+              disabled={busy || (!draft.trim() && !photo)}
             >
               <SendIcon className="size-6" />
             </button>
@@ -320,7 +391,11 @@ function Message({ message, latest, disabled, onPick }: MessageProps) {
 
 function Progress({ progress }: { progress: AiProgress }) {
   const line =
-    progress.phase === "understanding" ? text.understanding : text.checking(progress.checked, progress.total, progress.passed);
+    progress.phase === "checking"
+      ? text.checking(progress.checked, progress.total, progress.passed)
+      : progress.phase === "opening"
+        ? text.opening
+        : text.understanding;
   return (
     <p className="bubble flex items-center gap-2" data-role="ai" role="status">
       <span className="size-2.5 flex-none animate-pulse rounded-full bg-indigo" aria-hidden="true" />
@@ -334,13 +409,20 @@ function Memory({ brief, disabled: busy }: { brief: ShoppingBrief; disabled: boo
   // Until the product type is known the checklist is only a guess, so its chips can't be edited.
   const disabled = busy || needsProduct(brief);
   const remove = (change: BriefChange, label: string) => void applyChanges([change], text.removed(label));
+  // Chips for filters that came from the shopper's past searches carry a small marker.
+  const marker = (key: string) =>
+    brief.remembered.includes(key) ? (
+      <span role="img" title={text.fromMemoryMarker} aria-label={text.fromMemoryMarker} className="flex">
+        <HistoryIcon className="size-4" />
+      </span>
+    ) : undefined;
   return (
     <div className="mb-2.5">
       <p className="eyebrow text-[0.8125rem]">{text.remembering}</p>
       <ul className="mt-1 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
         {needsProduct(brief) ? null : (
           <li>
-            <Tag>
+            <Tag icon={marker("gender")}>
               <span className="tag-text">{categoryLabel(brief)}</span>
             </Tag>
           </li>
@@ -356,6 +438,7 @@ function Memory({ brief, disabled: busy }: { brief: ShoppingBrief; disabled: boo
                 label={label}
                 editKey={`chat-${mustHave.id}`}
                 tone={mustHave.from_rule ? "rule" : "plain"}
+                icon={mustHave.from_rule ? undefined : marker(mustHave.attribute)}
                 disabled={disabled}
                 onRemove={() => remove(change, label)}
               />
@@ -367,8 +450,9 @@ function Memory({ brief, disabled: busy }: { brief: ShoppingBrief; disabled: boo
           return (
             <li key={`${nice.attribute}:${String(nice.value)}`}>
               <EditableTag
-                label={label}
+                label={niceToHaveChip(nice)}
                 editKey={`chat-nice-${nice.attribute}`}
+                icon={nice.weight ? marker(nice.attribute) : undefined}
                 disabled={disabled}
                 onRemove={() => remove({ type: "remove_nice_to_have", attribute: nice.attribute, value: nice.value }, label)}
               />
@@ -380,6 +464,7 @@ function Memory({ brief, disabled: busy }: { brief: ShoppingBrief; disabled: boo
             <EditableTag
               label={strings.labels.budget(rupees(brief.budget_max_inr))}
               editKey="chat-budget"
+              icon={marker("budget_max_inr")}
               disabled={disabled}
               onRemove={() => remove({ type: "set_budget", budget_max_inr: null }, strings.labels.budget(rupees(brief.budget_max_inr ?? 0)))}
             />
@@ -390,6 +475,7 @@ function Memory({ brief, disabled: busy }: { brief: ShoppingBrief; disabled: boo
             <EditableTag
               label={strings.labels.minRating(brief.min_rating)}
               editKey="chat-rating"
+              icon={marker("min_rating")}
               disabled={disabled}
               onRemove={() => remove({ type: "set_min_rating", min_rating: null }, strings.labels.minRating(brief.min_rating ?? 0))}
             />
@@ -410,12 +496,85 @@ function Memory({ brief, disabled: busy }: { brief: ShoppingBrief; disabled: boo
             <EditableTag
               label={strings.labels.size(brief.size)}
               editKey="chat-size"
+              icon={marker("size")}
               disabled={disabled}
               onRemove={() => remove({ type: "set_size", size: null }, strings.labels.size(brief.size ?? ""))}
             />
           </li>
         ) : null}
       </ul>
+    </div>
+  );
+}
+
+type Group = "today" | "yesterday" | "week" | "older";
+const GROUPS: Group[] = ["today", "yesterday", "week", "older"];
+
+/** Which heading a chat sits under, by the day it last changed in India. */
+function groupOf(updatedAt: string): Group {
+  const today = dayInIndia(new Date());
+  const day = dayInIndia(updatedAt);
+  if (day >= today) return "today";
+  if (day === addDays(today, -1)) return "yesterday";
+  const from = parseIsoDate(day);
+  const to = parseIsoDate(today);
+  return from && to && (to.getTime() - from.getTime()) / 86_400_000 < 7 ? "week" : "older";
+}
+
+function ago(updatedAt: string): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(updatedAt).getTime()) / 60_000));
+  if (minutes < 1) return text.ago.now;
+  if (minutes < 60) return text.ago.minutes(minutes);
+  if (minutes < 24 * 60) return text.ago.hours(Math.floor(minutes / 60));
+  return text.ago.days(Math.floor(minutes / (24 * 60)));
+}
+
+/** The shopper's saved chats, newest first under Today, Yesterday, This week and Older. */
+function PastChats({ disabled, onOpen }: { disabled: boolean; onOpen: (chatId: string) => void }) {
+  const [state, setState] = useState<{ chats: ChatSummary[] } | { error: string } | null>(null);
+  useEffect(() => {
+    let current = true;
+    listChats().then(
+      (chats) => current && setState({ chats }),
+      (error) => current && setState({ error: errorMessage(error) }),
+    );
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  if (!state) return <p role="status">{text.loadingChats}</p>;
+  if ("error" in state) return <p className="bubble" data-role="ai" data-error="">{state.error}</p>;
+  if (state.chats.length === 0) return <p className="bubble" data-role="ai">{text.noPastChats}</p>;
+  return (
+    <div className="flex flex-col gap-4">
+      <h3 className="sr-only">{text.pastChatsTitle}</h3>
+      {GROUPS.map((group) => {
+        const rows = state.chats.filter((c) => groupOf(c.timestamps.updated_at) === group);
+        if (rows.length === 0) return null;
+        return (
+          <section key={group} aria-label={text.groups[group]}>
+            <p className="eyebrow">{text.groups[group]}</p>
+            <ul className="mt-1.5 flex flex-col gap-2">
+              {rows.map((row) => (
+                <li key={row.chat_id}>
+                  <button
+                    type="button"
+                    className="flex w-full flex-col gap-0.5 rounded-2xl border-2 border-line bg-card px-3.5 py-2.5 text-left transition hover:border-line-strong disabled:opacity-60"
+                    disabled={disabled}
+                    onClick={() => onOpen(row.chat_id)}
+                  >
+                    <span className="font-semibold">{row.title || text.untitled}</span>
+                    <span className="text-base text-ink-soft">
+                      {[...row.products, ago(row.timestamps.updated_at)].join(" · ")}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }

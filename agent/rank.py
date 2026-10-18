@@ -3,9 +3,11 @@
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+from agent import mix
 from agent.learn import cosine
 from agent.models import Evidence, MustHave, NiceToHave, Product, ShoppingBrief, Status, Verification
 from agent.rules import failure_label, label
@@ -93,8 +95,10 @@ def rank(brief: ShoppingBrief, candidates: list[Candidate], taste: dict[str, lis
     entries.sort(key=lambda e: (not e.confirmed, -e.score))
     unique = _without_duplicates(entries)
 
-    matches = [_result(e) for e in unique if e.confirmed]
-    almost = [_result(e) for e in unique if not e.confirmed]
+    # A colour mix from memory mode takes turns by share in each list: mostly the newest colour, fewer of the older.
+    shares, colour = mix.shares(brief), lambda e: mix.product_family(e.candidate.product)
+    matches = [_result(e) for e in mix.interleave([e for e in unique if e.confirmed], colour, shares)]
+    almost = [_result(e) for e in mix.interleave([e for e in unique if not e.confirmed], colour, shares)]
     return Results(
         matches=matches,
         almost=almost,
@@ -167,14 +171,15 @@ def _score(
 
 
 def _nice_to_have_share(nice_to_haves: list[NiceToHave], product: Product) -> float:
+    """The share of wishes met. A colour mix is one wish, met by any of its colours."""
     if not nice_to_haves:
         return 0.0
-    met = 0
-    for nice in nice_to_haves:
+    wishes: dict[Any, bool] = {}
+    for n, nice in enumerate(nice_to_haves):
         attribute = product.attributes.get(nice.attribute)
-        if attribute is not None and _same_value(attribute.value, nice.value):
-            met += 1
-    return met / len(nice_to_haves)
+        key = nice.attribute if nice.weight else n
+        wishes[key] = wishes.get(key, False) or (attribute is not None and _same_value(attribute.value, nice.value))
+    return sum(wishes.values()) / len(wishes)
 
 
 def _same_value(a: str | bool | float, b: str | bool | float) -> bool:

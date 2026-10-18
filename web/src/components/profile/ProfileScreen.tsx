@@ -7,16 +7,16 @@ import { LockIcon, PinIcon, PlusIcon } from "@/components/icons";
 import { ScreenPlaceholder } from "@/components/NoSession";
 import { RuleEditor, type RuleDraft } from "@/components/profile/RuleEditor";
 import { FieldEditor } from "@/components/understood/Editors";
-import { clearTaste, deleteMe, getMe, saveRules, updateMe } from "@/lib/api";
+import { clearOrders, clearTaste, deleteMe, getMe, getOrders, saveRules, updateMe } from "@/lib/api";
 import { forgetDevice, signInRequired, signOut, useAuth } from "@/lib/auth";
 import { newChat } from "@/lib/chat";
 import { canRetry, errorMessage } from "@/lib/errors";
-import { isValidPincode } from "@/lib/format";
+import { isValidPincode, shortDayInIndia } from "@/lib/format";
 import { mustHaveLabel } from "@/lib/labels";
 import { pincodeStore } from "@/lib/session";
 import { useIsClient } from "@/lib/stored";
 import { strings } from "@/lib/strings";
-import type { Me, MustHave } from "@/lib/types";
+import type { DemoOrder, Me, MustHave } from "@/lib/types";
 
 const text = strings.profile;
 
@@ -125,6 +125,7 @@ function Profile({ me }: { me: Me }) {
       <PincodeSection saved={me.pincode} />
       <RulesSection initial={me.rules} />
       <TasteSection initial={me.has_taste} />
+      <OrdersSection />
       <DataSection />
       {signInRequired ? (
         <button type="button" className="btn btn-secondary w-full" onClick={() => void leave(false)}>
@@ -345,6 +346,57 @@ function TasteSection({ initial }: { initial: boolean }) {
         <button type="button" className="btn btn-secondary btn-small self-start" onClick={() => void clear()} disabled={busy}>
           {text.clearTaste}
         </button>
+      ) : null}
+      <NoteLine note={note} />
+    </Section>
+  );
+}
+
+function OrdersSection() {
+  const [orders, setOrders] = useState<DemoOrder[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<Note>(null);
+  const copy = strings.orders;
+
+  useEffect(() => {
+    let live = true;
+    getOrders().then(
+      (found) => live && setOrders(found),
+      (error: unknown) => live && setNote({ kind: "error", message: errorMessage(error) }),
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  async function clear() {
+    setBusy(true);
+    setNote({ kind: "saving" });
+    try {
+      await clearOrders();
+      setOrders([]);
+      setNote({ kind: "done", message: copy.cleared });
+    } catch (caught) {
+      setNote({ kind: "error", message: errorMessage(caught) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title={copy.profileTitle} hint={copy.profileHint}>
+      {orders && orders.length === 0 ? <p className="text-ink-soft">{copy.none}</p> : null}
+      {orders && orders.length > 0 ? (
+        <>
+          <ul className="flex flex-col gap-1.5">
+            {orders.map((order) => (
+              <li key={order.id}>{copy.line(order.title, shortDayInIndia(order.ordered_at), order.seeded)}</li>
+            ))}
+          </ul>
+          <button type="button" className="btn btn-secondary btn-small self-start" onClick={() => void clear()} disabled={busy}>
+            {copy.clear}
+          </button>
+        </>
       ) : null}
       <NoteLine note={note} />
     </Section>

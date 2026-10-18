@@ -6,6 +6,7 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import { AccountButton } from "@/components/AppHeader";
 import { AiChat } from "@/components/chat/AiChat";
 import { ArrowLeftIcon, CloseIcon, SearchIcon, SparkleIcon, TagMark } from "@/components/icons";
+import { FromYourOrders } from "@/components/store/FromYourOrders";
 import { AiTile, ProductTile } from "@/components/store/ProductTile";
 import { getCatalog } from "@/lib/api";
 import { aiProgressStore, chatOpenStore, chatStore, newChat, showStore, type AiProgress } from "@/lib/chat";
@@ -94,7 +95,10 @@ export function StoreScreen() {
         {showAi && aiSession ? (
           <AiResults session={aiSession} results={aiResults} progress={progress} />
         ) : (
-          <Catalog filters={filters} go={go} />
+          <>
+            {!filters.q && !filters.category ? <FromYourOrders gender={filters.gender} /> : null}
+            <Catalog filters={filters} go={go} />
+          </>
         )}
       </main>
       <AiChat />
@@ -378,9 +382,9 @@ function AiResults({ session, results, progress }: AiResultsProps) {
           <h1 className="display mt-1 text-[1.75rem]">{categoryLabel(brief)}</h1>
           <p className="mt-1 font-semibold" role="status">
             {progress
-              ? progress.phase === "understanding"
-                ? text.aiUnderstanding
-                : text.aiChecking(progress.checked, progress.total, progress.passed)
+              ? progress.phase === "checking"
+                ? text.aiChecking(progress.checked, progress.total, progress.passed)
+                : text.aiUnderstanding
               : current
                 ? text.aiSummary(current.done.checked, current.done.passed)
                 : null}
