@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>EcommAI spot check</title>
+<style>
+  :root { --ink: #181d45; --soft: #4a5079; --line: #d6dbec; --paper: #f4f5fa; --pass: #157a3a; --fail: #b4232b; --grey: #5e6375; --accent: #2b3a9b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--paper); }
+  header { position: sticky; top: 0; z-index: 2; background: #fff; border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0 auto 0 0; }
+  header input { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; width: 160px; }
+  header label { color: var(--soft); font-size: 14px; display: flex; gap: 6px; align-items: center; }
+  .btn { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; }
+  .help { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; color: var(--soft); }
+  .help b { color: var(--ink); }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; margin: 16px 0; padding: 16px; display: grid; grid-template-columns: 260px 1fr; gap: 16px; }
+  .card.done { border-color: var(--pass); }
+  .card img { width: 100%; border-radius: 8px; background: var(--paper); }
+  .card h2 { font-size: 17px; margin: 0 0 2px; }
+  .meta { color: var(--soft); font-size: 14px; margin-bottom: 8px; }
+  .row { border-top: 1px solid var(--line); padding: 8px 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+  .name { font-size: 14px; color: var(--soft); }
+  .value { font-weight: 600; }
+  .badge { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; margin-left: 6px; color: var(--soft); font-weight: 400; }
+  .note { grid-column: 1 / -1; font-size: 13px; color: var(--soft); }
+  .choices { display: flex; gap: 6px; }
+  .choices button { font: inherit; font-size: 14px; min-height: 36px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  .choices button[aria-pressed="true"][data-v="right"] { background: var(--pass); border-color: var(--pass); color: #fff; }
+  .choices button[aria-pressed="true"][data-v="wrong"] { background: var(--fail); border-color: var(--fail); color: #fff; }
+  .choices button[aria-pressed="true"][data-v="unknown"] { background: var(--grey); border-color: var(--grey); color: #fff; }
+  .correction { grid-column: 1 / -1; font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+  .hidden { display: none; }
+  @media (max-width: 680px) { .card { grid-template-columns: 1fr; } .row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Spot check: <span id="progress"></span></h1>
+  <input id="reviewer" placeholder="Your name" aria-label="Your name">
+  <label><input type="checkbox" id="unfinished"> Only unfinished</label>
+  <button class="btn" id="download">Download my marks</button>
+</header>
+<main>
+  <div class="help">
+    For each detail, compare Gemini's value with the photo (tap the photo for full size).
+    <b>Right</b>: the photo matches. <b>Wrong</b>: the photo shows something else (type the correct value if you can).
+    <b>Should be unknown</b>: the photo can't show this, so Gemini guessed.
+    When Gemini says <b>unknown</b>, mark Right if the photo really can't show it, or Wrong if it can.
+    Details marked "catalogue" come from Myntra's own labels. Your marks are saved in this browser; download them when you're done and share the file.
+  </div>
+  <div id="cards"></div>
+</main>
+<script>
+const PRODUCTS = __PRODUCTS__;
+const KEY = "ecommai.spotcheck.v1";
+const marks = JSON.parse(localStorage.getItem(KEY) || "{}");
+const reviewer = document.getElementById("reviewer");
+reviewer.value = localStorage.getItem(KEY + ".reviewer") || "";
+reviewer.addEventListener("input", () => localStorage.setItem(KEY + ".reviewer", reviewer.value.trim()));
+
+const save = () => localStorage.setItem(KEY, JSON.stringify(marks));
+const markOf = (id, name) => (marks[id] || {})[name] || {};
+const isDone = (p) => p.details.every((d) => markOf(p.id, d.name).verdict);
+
+function setMark(id, name, patch) {
+  marks[id] = marks[id] || {};
+  marks[id][name] = { ...markOf(id, name), ...patch };
+  save();
+}
+
+function el(tag, attrs = {}, children = []) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "text") node.textContent = v; else node.setAttribute(k, v);
+  }
+  for (const child of children) node.append(child);
+  return node;
+}
+
+function detailRow(product, detail) {
+  const mark = markOf(product.id, detail.name);
+  const value = el("div", {}, [
+    el("div", { class: "name", text: detail.name.replace(/_/g, " ") }),
+    el("span", { class: "value", text: String(detail.value) }),
+    el("span", { class: "badge", text: `${detail.source}, ${Math.round((detail.confidence || 0) * 100)}%` }),
+  ]);
+  const correction = el("input", { class: "correction", placeholder: "Correct value (optional)", "aria-label": `Correct value for ${detail.name}` });
+  correction.value = mark.correction || "";
+  correction.classList.toggle("hidden", mark.verdict !== "wrong");
+  correction.addEventListener("input", () => setMark(product.id, detail.name, { correction: correction.value.trim() }));
+  const choices = el("div", { class: "choices", role: "group", "aria-label": `Is ${detail.name} right?` });
+  for (const [v, label] of [["right", "Right"], ["wrong", "Wrong"], ["unknown", "Should be unknown"]]) {
+    const button = el("button", { type: "button", "data-v": v, "aria-pressed": String(mark.verdict === v), text: label });
+    button.addEventListener("click", () => {
+      setMark(product.id, detail.name, { verdict: v });
+      for (const b of choices.children) b.setAttribute("aria-pressed", String(b.dataset.v === v));
+      correction.classList.toggle("hidden", v !== "wrong");
+      refresh();
+    });
+    choices.append(button);
+  }
+  return el("div", { class: "row" }, [value, choices, el("div", { class: "note", text: detail.note || "" }), correction]);
+}
+
+const cards = document.getElementById("cards");
+const cardById = {};
+for (const product of PRODUCTS) {
+  const photo = el("a", { href: product.original, target: "_blank", rel: "noopener" }, [
+    el("img", { src: product.photo, alt: product.title, loading: "lazy" }),
+  ]);
+  const body = el("div", {}, [
+    el("h2", { text: product.title }),
+    el("div", { class: "meta", text: `${product.type} · id ${product.id}` }),
+    ...product.details.map((d) => detailRow(product, d)),
+  ]);
+  cardById[product.id] = el("section", { class: "card" }, [photo, body]);
+  cards.append(cardById[product.id]);
+}
+
+const unfinished = document.getElementById("unfinished");
+unfinished.addEventListener("change", refresh);
+
+function refresh() {
+  let done = 0;
+  for (const product of PRODUCTS) {
+    const finished = isDone(product);
+    done += finished;
+    cardById[product.id].classList.toggle("done", finished);
+    cardById[product.id].classList.toggle("hidden", unfinished.checked && finished);
+  }
+  document.getElementById("progress").textContent = `${done} of ${PRODUCTS.length} products done`;
+}
+
+document.getElementById("download").addEventListener("click", () => {
+  const name = reviewer.value.trim() || "anonymous";
+  const out = [];
+  for (const product of PRODUCTS) {
+    for (const detail of product.details) {
+      const mark = markOf(product.id, detail.name);
+      if (mark.verdict) out.push({ id: product.id, name: detail.name, value: detail.value, source: detail.source, verdict: mark.verdict, correction: mark.correction || null, reviewer: name });
+    }
+  }
+  const blob = new Blob([JSON.stringify({ reviewer: name, exported_at: new Date().toISOString(), marks: out }, null, 1)], { type: "application/json" });
+  const link = el("a", { href: URL.createObjectURL(blob), download: `spot_check_results_${name.replace(/\W+/g, "_")}.json` });
+  link.click();
+});
+
+refresh();
+</script>
+</body>
+</html>

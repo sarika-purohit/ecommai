@@ -1,0 +1,404 @@
+id,gender,masterCategory,subCategory,articleType,baseColour,season,year,usage,productDisplayName
+10001,Men,Accessories,Bags,Backpacks,Red,Spring,2012,Ethnic,Fastrack Men Red Backpack
+10002,Men,Footwear,Shoes,Sports Shoes,Pink,Spring,2012,Sports,W Men Pink Sports Shoes
+10003,Women,Apparel,Topwear,Tops,White,Spring,2015,Casual,Titan Women White Top
+10004,Women,Accessories,Eyewear,Sunglasses,Green,Summer,2012,Ethnic,Titan Women Green Sunglasses
+10005,Men,Apparel,Topwear,Tshirts,White,Fall,2012,Ethnic,Biba Men White Tshirt
+10006,Women,Apparel,Bottomwear,Trousers,Navy Blue,Winter,2011,Sports,Fastrack Women Navy Blue Trousers
+10007,Men,Apparel,Bottomwear,Jeans,Brown,Winter,2012,Sports,Biba Men Brown Jeans
+10008,Men,Apparel,Topwear,Tshirts,Pink,Fall,2016,Formal,Titan Men Pink Tshirt
+10009,Men,Footwear,Shoes,Sports Shoes,Blue,Summer,2015,Casual,Nike Men Blue Sports Shoes
+10010,Unisex,Accessories,Eyewear,Sunglasses,Blue,Spring,2016,Casual,Baggit Unisex Blue Sunglasses
+10011,Women,Apparel,Topwear,Tunics,Grey,Fall,2011,Casual,Nike Women Grey Tunic
+10012,Men,Footwear,Shoes,Sports Shoes,Green,Summer,2015,Ethnic,Fabindia Men Green Sports Shoes
+10013,Women,Apparel,Bottomwear,Jeans,Black,Fall,2012,Sports,Biba Women Black Jeans
+10014,Men,Apparel,Topwear,Tshirts,Red,Winter,2016,Ethnic,Titan Men Red Tshirt
+10015,Men,Apparel,Topwear,Shirts,White,Summer,2012,Sports,Puma Men White Shirt
+10016,Men,Footwear,Shoes,Casual Shoes,White,Summer,2011,Ethnic,Puma Men White Casual Shoes
+10017,Men,Footwear,Shoes,Sports Shoes,White,Winter,2011,Ethnic,Wildcraft Men White Sports Shoes
+10018,Women,Accessories,Eyewear,Sunglasses,White,Summer,2015,Sports,Fastrack Women White Sunglasses
+10019,Women,Accessories,Socks,Socks,Red,Winter,2011,Formal,Wildcraft Women Red Socks
+10020,Women,Accessories,Watches,Watches,White,Fall,2011,Formal,Biba Women White Watch
+10021,Women,Apparel,Topwear,Kurtas,Green,Fall,2012,Ethnic,Puma Women Green Kurta
+10022,Unisex,Accessories,Bags,Backpacks,Brown,Winter,2015,Ethnic,Baggit Unisex Brown Backpack
+10023,Women,Accessories,Bags,Backpacks,Black,Summer,2011,Casual,Puma Women Black Backpack
+10024,Women,Apparel,Topwear,Tops,Pink,Winter,2016,Formal,Baggit Women Pink Top
+10025,Women,Footwear,Shoes,Formal Shoes,Brown,Spring,2016,Sports,Fabindia Women Brown Formal Shoes
+10026,Men,Footwear,Shoes,Formal Shoes,Pink,Winter,2012,Ethnic,Puma Men Pink Formal Shoes
+10027,Men,Apparel,Topwear,Shirts,Green,Winter,2016,Ethnic,Peter England Men Green Shirt
+10028,Women,Apparel,Topwear,Kurtas,Black,Summer,2011,Ethnic,Biba Women Black Kurta
+10029,Unisex,Accessories,Bags,Backpacks,Grey,Summer,2011,Sports,Biba Unisex Grey Backpack
+10030,Women,Footwear,Shoes,Formal Shoes,Pink,Fall,2012,Ethnic,Levis Women Pink Formal Shoes
+10031,Unisex,Accessories,Bags,Backpacks,Black,Winter,2012,Ethnic,Fastrack Unisex Black Backpack
+10032,Women,Accessories,Bags,Handbags,Brown,Fall,2015,Ethnic,Roadster Women Brown Handbag
+10033,Men,Accessories,Socks,Socks,Pink,Winter,2011,Ethnic,Nike Men Pink Socks
+10034,Women,Apparel,Topwear,Tshirts,Green,Winter,2011,Ethnic,Nike Women Green Tshirt
+10035,Girls,Apparel,Topwear,Tops,Grey,Spring,2015,Formal,Fabindia Girls Grey Top
+10036,Women,Apparel,Topwear,Kurtas,Green,Summer,2011,Ethnic,Baggit Women Green Kurta
+10037,Women,Footwear,Shoes,Casual Shoes,White,Spring,2011,Sports,Biba Women White Casual Shoes
+10038,Men,Footwear,Shoes,Formal Shoes,Black,Fall,2012,Casual,Puma Men Black Formal Shoes
+10039,Men,Apparel,Bottomwear,Trousers,Maroon,Winter,2016,Ethnic,Baggit Men Maroon Trousers
+10040,Women,Apparel,Topwear,Tshirts,Brown,Fall,2012,Casual,Biba Women Brown Tshirt
+10041,Men,Apparel,Topwear,Tshirts,Pink,Spring,2012,Casual,Levis Men Pink Tshirt
+10042,Unisex,Accessories,Eyewear,Sunglasses,Maroon,Winter,2011,Casual,Peter England Unisex Maroon Sunglasses
+10043,Women,Apparel,Bottomwear,Jeans,Black,Fall,2011,Sports,Biba Women Black Jeans
+10044,Women,Apparel,Topwear,Kurtas,Brown,Summer,2011,Formal,Baggit Women Brown Kurta
+10045,Men,Apparel,Topwear,Shirts,Brown,Summer,2016,Casual,Puma Men Brown Shirt
+10046,Women,Accessories,Watches,Watches,Pink,Summer,2011,Sports,Baggit Women Pink Watch
+10047,Men,Footwear,Shoes,Sports Shoes,Red,Fall,2012,Formal,Fabindia Men Red Sports Shoes
+10048,Women,Accessories,Watches,Watches,Green,Spring,2016,Sports,Peter England Women Green Watch
+10049,Women,Apparel,Topwear,Kurtis,White,Fall,2011,Formal,Fastrack Women White Kurti
+10050,Women,Apparel,Topwear,Kurtas,White,Winter,2015,Ethnic,Wildcraft Women White Kurta
+10051,Women,Accessories,Socks,Socks,Red,Winter,2011,Sports,Wildcraft Women Red Socks
+10052,Men,Apparel,Topwear,Shirts,Black,Fall,2011,Formal,Fastrack Men Black Shirt
+10053,Men,Apparel,Topwear,Tshirts,Brown,Fall,2016,Sports,Puma Men Brown Tshirt
+10054,Men,Footwear,Shoes,Casual Shoes,Brown,Winter,2015,Casual,Fabindia Men Brown Casual Shoes
+10055,Men,Accessories,Watches,Watches,Brown,Fall,2016,Casual,Roadster Men Brown Watch
+10056,Women,Apparel,Topwear,Tshirts,Pink,Fall,2016,Formal,Fastrack Women Pink Tshirt
+10057,Men,Apparel,Topwear,Shirts,Green,Summer,2012,Ethnic,Fabindia Men Green Shirt
+10058,Women,Apparel,Topwear,Tunics,Blue,Fall,2011,Ethnic,Biba Women Blue Tunic
+10059,Men,Apparel,Bottomwear,Jeans,Green,Spring,2016,Casual,Fastrack Men Green Jeans
+10060,Women,Footwear,Shoes,Casual Shoes,Navy Blue,Spring,2016,Sports,Roadster Women Navy Blue Casual Shoes
+10061,Women,Apparel,Topwear,Kurtas,Red,Winter,2016,Ethnic,Peter England Women Red Kurta
+10062,Girls,Apparel,Topwear,Tops,Grey,Summer,2015,Casual,Nike Girls Grey Top
+10063,Women,Apparel,Topwear,Kurtas,Blue,Spring,2011,Formal,Nike Women Blue Kurta
+10064,Women,Apparel,Topwear,Tops,Black,Fall,2015,Ethnic,Peter England Women Black Top
+10065,Women,Accessories,Watches,Watches,White,Spring,2011,Ethnic,Titan Women White Watch
+10066,Women,Accessories,Watches,Watches,Grey,Summer,2015,Casual,Puma Women Grey Watch
+10067,Men,Apparel,Topwear,Tshirts,Black,Fall,2012,Formal,Levis Men Black Tshirt
+10068,Boys,Footwear,Shoes,Casual Shoes,Red,Fall,2012,Ethnic,Titan Boys Red Casual Shoes
+10069,Women,Apparel,Topwear,Kurtas,Grey,Spring,2012,Casual,Roadster Women Grey Kurta
+10070,Women,Footwear,Shoes,Casual Shoes,Black,Spring,2016,Formal,Peter England Women Black Casual Shoes
+10071,Men,Apparel,Bottomwear,Trousers,Red,Summer,2012,Formal,Fastrack Men Red Trousers
+10072,Women,Apparel,Topwear,Tops,Brown,Fall,2015,Ethnic,Titan Women Brown Top
+10073,Women,Footwear,Shoes,Sports Shoes,Red,Fall,2016,Formal,Peter England Women Red Sports Shoes
+10074,Men,Apparel,Topwear,Tshirts,Red,Spring,2011,Formal,Fastrack Men Red Tshirt
+10075,Men,Apparel,Bottomwear,Trousers,Navy Blue,Winter,2016,Formal,Fabindia Men Navy Blue Trousers
+10076,Women,Apparel,Topwear,Shirts,Brown,Spring,2016,Formal,Nike Women Brown Shirt
+10077,Men,Accessories,Watches,Watches,Pink,Winter,2011,Formal,W Men Pink Watch
+10078,Men,Accessories,Watches,Watches,Blue,Summer,2015,Formal,Baggit Men Blue Watch
+10079,Women,Footwear,Shoes,Casual Shoes,Blue,Winter,2011,Sports,Puma Women Blue Casual Shoes
+10080,Women,Apparel,Bottomwear,Trousers,Grey,Winter,2016,Ethnic,Titan Women Grey Trousers
+10081,Men,Apparel,Bottomwear,Jeans,Blue,Spring,2015,Ethnic,Roadster Men Blue Jeans
+10082,Women,Apparel,Topwear,Kurtas,Navy Blue,Winter,2011,Ethnic,Levis Women Navy Blue Kurta
+10083,Men,Footwear,Shoes,Casual Shoes,Green,Spring,2016,Sports,Titan Men Green Casual Shoes
+10084,Women,Footwear,Shoes,Sports Shoes,Red,Winter,2011,Sports,Roadster Women Red Sports Shoes
+10085,Men,Apparel,Topwear,Shirts,Brown,Spring,2011,Casual,Wildcraft Men Brown Shirt
+10086,Boys,Apparel,Topwear,Tshirts,Grey,Spring,2016,Formal,Baggit Boys Grey Tshirt
+10087,Men,Footwear,Shoes,Formal Shoes,White,Winter,2012,Casual,W Men White Formal Shoes
+10088,Men,Apparel,Topwear,Tshirts,Brown,Summer,2011,Formal,Fabindia Men Brown Tshirt
+10089,Women,Accessories,Bags,Handbags,Green,Summer,2015,Formal,Wildcraft Women Green Handbag
+10090,Women,Apparel,Topwear,Tops,Red,Spring,2011,Casual,Baggit Women Red Top
+10091,Girls,Apparel,Topwear,Tops,White,Winter,2016,Ethnic,Puma Girls White Top
+10092,Men,Accessories,Watches,Watches,Green,Summer,2011,Ethnic,Wildcraft Men Green Watch
+10093,Women,Accessories,Watches,Watches,Brown,Fall,2012,Sports,Puma Women Brown Watch
+10094,Unisex,Apparel,Topwear,Tshirts,Pink,Winter,2011,Sports,W Unisex Pink Tshirt
+10095,Women,Apparel,Bottomwear,Jeans,Red,Summer,2012,Sports,Roadster Women Red Jeans
+10096,Women,Accessories,Watches,Watches,Grey,Fall,2012,Sports,Fabindia Women Grey Watch
+10097,Unisex,Accessories,Bags,Backpacks,Blue,Spring,2011,Ethnic,W Unisex Blue Backpack
+10098,Women,Footwear,Shoes,Sports Shoes,Grey,Spring,2012,Casual,Nike Women Grey Sports Shoes
+10099,Men,Apparel,Topwear,Shirts,Red,Summer,2012,Sports,Peter England Men Red Shirt
+10100,Men,Apparel,Topwear,Tshirts,Green,Winter,2012,Sports,Puma Men Green Tshirt
+10101,Men,Accessories,Eyewear,Sunglasses,Green,Fall,2011,Sports,Puma Men Green Sunglasses
+10102,Women,Accessories,Bags,Handbags,Maroon,Winter,2016,Sports,Biba Women Maroon Handbag
+10103,Men,Accessories,Eyewear,Sunglasses,Black,Winter,2016,Casual,Wildcraft Men Black Sunglasses
+10104,Men,Footwear,Shoes,Casual Shoes,Green,Winter,2016,Casual,Roadster Men Green Casual Shoes
+10105,Men,Apparel,Innerwear,Briefs,Black,Spring,2016,Ethnic,Biba Men Black Briefs
+10106,Women,Apparel,Topwear,Tops,White,Winter,2015,Formal,Fabindia Women White Top
+10107,Men,Footwear,Shoes,Formal Shoes,Navy Blue,Spring,2011,Ethnic,Levis Men Navy Blue Formal Shoes
+10108,Unisex,Accessories,Eyewear,Sunglasses,Grey,Fall,2016,Formal,Nike Unisex Grey Sunglasses
+10109,Women,Apparel,Topwear,Kurtas,White,Summer,2015,Casual,Roadster Women White Kurta
+10110,Men,Apparel,Topwear,Tshirts,Blue,Summer,2012,Sports,Titan Men Blue Tshirt
+10111,Women,Apparel,Topwear,Shirts,Blue,Spring,2011,Casual,Puma Women Blue Shirt
+10112,Unisex,Accessories,Bags,Backpacks,Brown,Fall,2016,Formal,W Unisex Brown Backpack
+10113,Boys,Apparel,Topwear,Tshirts,Blue,Spring,2011,Sports,Nike Boys Blue Tshirt
+10114,Women,Apparel,Topwear,Shirts,Green,Spring,2011,Sports,Levis Women Green Shirt
+10115,Unisex,Accessories,Watches,Watches,Black,Summer,2011,Ethnic,Fastrack Unisex Black Watch
+10116,Men,Footwear,Shoes,Casual Shoes,Green,Summer,2015,Ethnic,Peter England Men Green Casual Shoes
+10117,Men,Accessories,Eyewear,Sunglasses,Red,Summer,2015,Ethnic,Nike Men Red Sunglasses
+10118,Men,Apparel,Topwear,Shirts,Red,Summer,2011,Casual,Puma Men Red Shirt
+10119,Women,Apparel,Topwear,Kurtas,Green,Spring,2016,Sports,Fabindia Women Green Kurta
+10120,Women,Footwear,Shoes,Sports Shoes,Red,Spring,2012,Sports,Titan Women Red Sports Shoes
+10121,Unisex,Accessories,Bags,Backpacks,Navy Blue,Fall,2012,Formal,Roadster Unisex Navy Blue Backpack
+10122,Men,Footwear,Shoes,Sports Shoes,Blue,Spring,2015,Casual,Nike Men Blue Sports Shoes
+10123,Women,Apparel,Topwear,Tshirts,Pink,Spring,2012,Formal,W Women Pink Tshirt
+10124,Women,Accessories,Eyewear,Sunglasses,Grey,Summer,2016,Ethnic,Fabindia Women Grey Sunglasses
+10125,Women,Accessories,Bags,Handbags,Navy Blue,Summer,2011,Ethnic,Titan Women Navy Blue Handbag
+10126,Men,Apparel,Innerwear,Briefs,Maroon,Winter,2011,Sports,Fabindia Men Maroon Briefs
+10127,Men,Accessories,Watches,Watches,Brown,Spring,2012,Formal,Peter England Men Brown Watch
+10128,Men,Apparel,Topwear,Shirts,Navy Blue,Spring,2012,Casual,Titan Men Navy Blue Shirt
+10129,Women,Accessories,Bags,Handbags,Red,Fall,2015,Ethnic,Puma Women Red Handbag
+10130,Men,Apparel,Bottomwear,Jeans,Red,Fall,2012,Sports,Peter England Men Red Jeans
+10131,Men,Apparel,Topwear,Kurtas,Green,Winter,2012,Formal,Biba Men Green Kurta
+10132,Women,Accessories,Socks,Socks,Red,Winter,2015,Casual,Wildcraft Women Red Socks
+10133,Men,Footwear,Shoes,Casual Shoes,Grey,Winter,2012,Casual,Puma Men Grey Casual Shoes
+10134,Women,Apparel,Topwear,Tops,Brown,Summer,2011,Sports,Roadster Women Brown Top
+10135,Men,Footwear,Shoes,Casual Shoes,Green,Fall,2011,Ethnic,Fastrack Men Green Casual Shoes
+10136,Women,Apparel,Topwear,Kurtis,Green,Summer,2012,Formal,Fabindia Women Green Kurti
+10137,Men,Apparel,Topwear,Shirts,White,Winter,2016,Ethnic,Nike Men White Shirt
+10138,Men,Footwear,Shoes,Formal Shoes,Black,Fall,2012,Casual,Fabindia Men Black Formal Shoes
+10139,Men,Apparel,Topwear,Tshirts,Blue,Winter,2011,Formal,Nike Men Blue Tshirt
+10140,Men,Footwear,Shoes,Sports Shoes,Red,Winter,2011,Ethnic,Roadster Men Red Sports Shoes
+10141,Boys,Footwear,Shoes,Casual Shoes,Grey,Fall,2012,Ethnic,Levis Boys Grey Casual Shoes
+10142,Women,Footwear,Shoes,Sports Shoes,White,Summer,2016,Sports,W Women White Sports Shoes
+10143,Unisex,Apparel,Topwear,Tshirts,White,Summer,2016,Formal,Titan Unisex White Tshirt
+10144,Men,Apparel,Topwear,Shirts,Pink,Winter,2016,Ethnic,Fabindia Men Pink Shirt
+10145,Women,Footwear,Shoes,Casual Shoes,Grey,Fall,2016,Casual,Puma Women Grey Casual Shoes
+10146,Men,Apparel,Topwear,Shirts,Red,Fall,2016,Sports,Peter England Men Red Shirt
+10147,Women,Accessories,Bags,Clutches,Black,Winter,2016,Sports,Nike Women Black Clutch
+10148,Men,Apparel,Bottomwear,Jeans,Green,Spring,2012,Sports,Roadster Men Green Jeans
+10149,Women,Accessories,Bags,Handbags,White,Spring,2015,Sports,Fabindia Women White Handbag
+10150,Women,Apparel,Topwear,Tunics,Navy Blue,Summer,2011,Formal,Biba Women Navy Blue Tunic
+10151,Women,Accessories,Bags,Handbags,Grey,Fall,2012,Formal,Fabindia Women Grey Handbag
+10152,Women,Footwear,Shoes,Sports Shoes,Blue,Winter,2012,Casual,Puma Women Blue Sports Shoes
+10153,Men,Apparel,Topwear,Shirts,White,Spring,2012,Ethnic,Titan Men White Shirt
+10154,Men,Apparel,Topwear,Kurtas,Navy Blue,Spring,2015,Casual,Roadster Men Navy Blue Kurta
+10155,Men,Accessories,Watches,Watches,Maroon,Spring,2011,Formal,Levis Men Maroon Watch
+10156,Women,Apparel,Bottomwear,Trousers,Green,Spring,2012,Sports,Wildcraft Women Green Trousers
+10157,Women,Accessories,Bags,Handbags,Navy Blue,Winter,2011,Sports,Wildcraft Women Navy Blue Handbag
+10158,Men,Accessories,Watches,Watches,Pink,Spring,2015,Casual,Biba Men Pink Watch
+10159,Unisex,Accessories,Eyewear,Sunglasses,Navy Blue,Winter,2011,Casual,W Unisex Navy Blue Sunglasses
+10160,Men,Apparel,Topwear,Shirts,Blue,Spring,2016,Ethnic,Fabindia Men Blue Shirt
+10161,Girls,Accessories,Watches,Watches,Grey,Winter,2016,Sports,Puma Girls Grey Watch
+10162,Men,Accessories,Watches,Watches,Blue,Spring,2012,Casual,Fastrack Men Blue Watch
+10163,Women,Apparel,Topwear,Tops,Black,Spring,2016,Formal,Wildcraft Women Black Top
+10164,Women,Footwear,Shoes,Sports Shoes,Brown,Spring,2012,Sports,Wildcraft Women Brown Sports Shoes
+10165,Men,Accessories,Bags,Backpacks,Grey,Summer,2012,Ethnic,Fabindia Men Grey Backpack
+10166,Women,Apparel,Topwear,Tops,Grey,Summer,2016,Casual,Nike Women Grey Top
+10167,Men,Accessories,Eyewear,Sunglasses,Black,Winter,2011,Ethnic,Levis Men Black Sunglasses
+10168,Men,Apparel,Topwear,Tshirts,Pink,Summer,2016,Formal,Fabindia Men Pink Tshirt
+10169,Women,Apparel,Topwear,Tops,Black,Summer,2012,Formal,Fabindia Women Black Top
+10170,Women,Footwear,Shoes,Casual Shoes,Brown,Winter,2012,Casual,Puma Women Brown Casual Shoes
+10171,Women,Apparel,Bottomwear,Trousers,Blue,Fall,2012,Ethnic,Wildcraft Women Blue Trousers
+10172,Men,Footwear,Shoes,Formal Shoes,Maroon,Spring,2012,Ethnic,Puma Men Maroon Formal Shoes
+10173,Men,Accessories,Watches,Watches,Pink,Winter,2015,Formal,Fastrack Men Pink Watch
+10174,Girls,Accessories,Watches,Watches,Blue,Summer,2012,Formal,Nike Girls Blue Watch
+10175,Women,Apparel,Topwear,Tshirts,Grey,Fall,2015,Sports,Biba Women Grey Tshirt
+10176,Men,Apparel,Topwear,Tshirts,Navy Blue,Summer,2011,Ethnic,Puma Men Navy Blue Tshirt
+10177,Women,Apparel,Topwear,Shirts,Brown,Summer,2015,Sports,Baggit Women Brown Shirt
+10178,Women,Accessories,Bags,Handbags,Blue,Spring,2015,Formal,Puma Women Blue Handbag
+10179,Women,Apparel,Topwear,Kurtis,Blue,Summer,2016,Formal,Nike Women Blue Kurti
+10180,Women,Apparel,Topwear,Kurtis,Navy Blue,Summer,2015,Ethnic,Wildcraft Women Navy Blue Kurti
+10181,Women,Accessories,Bags,Handbags,Red,Fall,2011,Casual,Levis Women Red Handbag
+10182,Girls,Apparel,Topwear,Tops,Green,Fall,2016,Sports,Biba Girls Green Top
+10183,Women,Accessories,Watches,Watches,Pink,Summer,2012,Sports,Nike Women Pink Watch
+10184,Women,Apparel,Topwear,Kurtis,Green,Summer,2011,Casual,Wildcraft Women Green Kurti
+10185,Men,Footwear,Shoes,Casual Shoes,Black,Fall,2015,Casual,Wildcraft Men Black Casual Shoes
+10186,Men,Apparel,Bottomwear,Jeans,Pink,Winter,2016,Ethnic,Nike Men Pink Jeans
+10187,Men,Apparel,Topwear,Kurtas,Maroon,Winter,2015,Sports,Biba Men Maroon Kurta
+10188,Men,Apparel,Topwear,Shirts,Navy Blue,Summer,2012,Formal,Biba Men Navy Blue Shirt
+10189,Women,Accessories,Bags,Handbags,Brown,Summer,2012,Ethnic,Fabindia Women Brown Handbag
+10190,Men,Footwear,Shoes,Sports Shoes,Grey,Summer,2011,Ethnic,Puma Men Grey Sports Shoes
+10191,Men,Accessories,Eyewear,Sunglasses,Maroon,Spring,2016,Formal,Levis Men Maroon Sunglasses
+10192,Men,Footwear,Shoes,Casual Shoes,Navy Blue,Summer,2011,Casual,Roadster Men Navy Blue Casual Shoes
+10193,Women,Footwear,Shoes,Casual Shoes,Grey,Winter,2012,Casual,Biba Women Grey Casual Shoes
+10194,Men,Apparel,Topwear,Tshirts,White,Winter,2012,Sports,Roadster Men White Tshirt
+10195,Men,Apparel,Topwear,Tshirts,Green,Spring,2012,Ethnic,Baggit Men Green Tshirt
+10196,Women,Accessories,Eyewear,Sunglasses,White,Summer,2016,Casual,Puma Women White Sunglasses
+10197,Women,Apparel,Topwear,Kurtas,Grey,Spring,2011,Sports,Titan Women Grey Kurta
+10198,Men,Accessories,Socks,Socks,Navy Blue,Summer,2015,Formal,W Men Navy Blue Socks
+39386,Men,Accessories,Eyewear,Sunglasses,Black,Winter,2016,Casual,Ray Ban Men Sunglasses, Black, Aviator
+39387,Women,Accessories,Watches,Watches,Silver,Summer,2012,Formal,Titan Raga Women Watch, Silver Dial
+,Men,Apparel,Topwear,Shirts,Blue,Summer,2012,Casual,Orphan Men Blue Shirt
+39388,Women,Apparel,Topwear,Kurtas,Green,Summer,2016,,Fabindia Women Green Kurta
+10005,Men,Apparel,Topwear,Tshirts,White,Fall,2012,Ethnic,Biba Men White Tshirt
+
+10199,Women,Apparel,Topwear,Tops,Black,Fall,2015,Casual,Fabindia Women Black Top
+10200,Women,Apparel,Topwear,Tshirts,Red,Spring,2015,Ethnic,Levis Women Red Tshirt
+10201,Women,Accessories,Watches,Watches,Green,Summer,2012,Ethnic,Fabindia Women Green Watch
+10202,Men,Apparel,Topwear,Tshirts,Green,Winter,2012,Ethnic,Peter England Men Green Tshirt
+10203,Women,Footwear,Shoes,Casual Shoes,Green,Fall,2012,Sports,Titan Women Green Casual Shoes
+10204,Women,Accessories,Bags,Clutches,Pink,Spring,2011,Casual,Fastrack Women Pink Clutch
+10205,Women,Accessories,Socks,Socks,Grey,Winter,2015,Formal,Peter England Women Grey Socks
+10206,Men,Apparel,Topwear,Kurtas,Grey,Summer,2012,Formal,Wildcraft Men Grey Kurta
+10207,Men,Apparel,Topwear,Tshirts,Black,Summer,2011,Formal,Roadster Men Black Tshirt
+10208,Men,Accessories,Watches,Watches,Blue,Summer,2011,Casual,Biba Men Blue Watch
+10209,Women,Apparel,Topwear,Kurtas,Navy Blue,Summer,2011,Casual,Peter England Women Navy Blue Kurta
+10210,Unisex,Apparel,Topwear,Tshirts,White,Fall,2012,Casual,Wildcraft Unisex White Tshirt
+10211,Men,Apparel,Topwear,Tshirts,Grey,Winter,2012,Formal,Fabindia Men Grey Tshirt
+10212,Girls,Apparel,Topwear,Tops,White,Summer,2011,Ethnic,Roadster Girls White Top
+10213,Men,Apparel,Topwear,Tshirts,Brown,Winter,2011,Formal,Fabindia Men Brown Tshirt
+10214,Boys,Footwear,Shoes,Casual Shoes,Red,Fall,2016,Ethnic,Nike Boys Red Casual Shoes
+10215,Men,Apparel,Bottomwear,Jeans,Black,Fall,2015,Casual,Nike Men Black Jeans
+10216,Boys,Apparel,Topwear,Tshirts,Blue,Spring,2015,Casual,Nike Boys Blue Tshirt
+10217,Men,Apparel,Topwear,Tshirts,Grey,Spring,2011,Ethnic,Roadster Men Grey Tshirt
+10218,Men,Accessories,Watches,Watches,Brown,Summer,2012,Casual,Peter England Men Brown Watch
+10219,Women,Apparel,Topwear,Kurtas,Maroon,Winter,2016,Casual,Puma Women Maroon Kurta
+10220,Women,Apparel,Topwear,Kurtas,Pink,Fall,2011,Casual,W Women Pink Kurta
+10221,Women,Apparel,Topwear,Kurtas,Blue,Summer,2016,Formal,Fastrack Women Blue Kurta
+10222,Women,Apparel,Topwear,Tops,Brown,Fall,2015,Formal,Wildcraft Women Brown Top
+10223,Men,Footwear,Shoes,Casual Shoes,Red,Winter,2016,Formal,W Men Red Casual Shoes
+10224,Unisex,Accessories,Watches,Watches,White,Summer,2016,Casual,Levis Unisex White Watch
+10225,Men,Footwear,Shoes,Sports Shoes,Blue,Summer,2016,Sports,Nike Men Blue Sports Shoes
+10226,Men,Footwear,Shoes,Casual Shoes,White,Summer,2015,Formal,Titan Men White Casual Shoes
+10227,Boys,Apparel,Topwear,Tshirts,Red,Spring,2012,Sports,Puma Boys Red Tshirt
+10228,Women,Apparel,Topwear,Kurtas,Green,Winter,2011,Ethnic,Fastrack Women Green Kurta
+10229,Men,Apparel,Topwear,Tshirts,Maroon,Winter,2016,Ethnic,Nike Men Maroon Tshirt
+10230,Men,Footwear,Shoes,Casual Shoes,Navy Blue,Spring,2015,Formal,Fastrack Men Navy Blue Casual Shoes
+10231,Men,Apparel,Bottomwear,Trousers,Navy Blue,Spring,2012,Formal,Nike Men Navy Blue Trousers
+10232,Women,Apparel,Bottomwear,Jeans,Red,Winter,2012,Formal,Puma Women Red Jeans
+10233,Men,Apparel,Innerwear,Briefs,Blue,Fall,2012,Formal,Wildcraft Men Blue Briefs
+10234,Women,Apparel,Topwear,Tunics,Blue,Fall,2011,Formal,W Women Blue Tunic
+10235,Unisex,Footwear,Shoes,Casual Shoes,White,Spring,2012,Formal,W Unisex White Casual Shoes
+10236,Men,Apparel,Bottomwear,Trousers,Red,Fall,2016,Ethnic,Peter England Men Red Trousers
+10237,Women,Accessories,Bags,Clutches,Green,Summer,2015,Formal,Fabindia Women Green Clutch
+10238,Women,Apparel,Topwear,Shirts,Grey,Summer,2011,Sports,Fastrack Women Grey Shirt
+10239,Women,Apparel,Topwear,Tops,Grey,Winter,2015,Sports,Peter England Women Grey Top
+10240,Men,Apparel,Bottomwear,Jeans,Black,Fall,2016,Casual,Biba Men Black Jeans
+10241,Women,Apparel,Topwear,Kurtas,Green,Spring,2012,Formal,Titan Women Green Kurta
+10242,Women,Apparel,Topwear,Tops,Navy Blue,Summer,2016,Sports,Levis Women Navy Blue Top
+10243,Women,Apparel,Topwear,Kurtas,Blue,Summer,2016,Formal,Puma Women Blue Kurta
+10244,Women,Accessories,Bags,Handbags,Grey,Winter,2015,Sports,Peter England Women Grey Handbag
+10245,Men,Apparel,Topwear,Tshirts,Brown,Summer,2016,Formal,Fastrack Men Brown Tshirt
+10246,Men,Apparel,Topwear,Shirts,Blue,Spring,2016,Casual,Roadster Men Blue Shirt
+10247,Men,Apparel,Topwear,Shirts,Black,Winter,2012,Formal,Puma Men Black Shirt
+10248,Men,Apparel,Innerwear,Briefs,Pink,Summer,2016,Formal,Nike Men Pink Briefs
+10249,Women,Apparel,Topwear,Tops,Brown,Summer,2015,Ethnic,Baggit Women Brown Top
+10250,Women,Accessories,Bags,Handbags,Grey,Spring,2012,Formal,Peter England Women Grey Handbag
+10251,Men,Accessories,Bags,Backpacks,Grey,Summer,2015,Casual,Baggit Men Grey Backpack
+10252,Men,Apparel,Topwear,Tshirts,Red,Spring,2016,Casual,Puma Men Red Tshirt
+10253,Men,Accessories,Watches,Watches,Black,Spring,2016,Ethnic,Fabindia Men Black Watch
+10254,Women,Apparel,Bottomwear,Jeans,Maroon,Summer,2012,Ethnic,Puma Women Maroon Jeans
+10255,Women,Accessories,Bags,Clutches,Grey,Winter,2016,Sports,Baggit Women Grey Clutch
+10256,Men,Accessories,Watches,Watches,Green,Winter,2011,Formal,Biba Men Green Watch
+10257,Men,Apparel,Topwear,Kurtas,Brown,Winter,2012,Ethnic,Levis Men Brown Kurta
+10258,Women,Apparel,Topwear,Tshirts,Grey,Fall,2012,Sports,Fastrack Women Grey Tshirt
+10259,Women,Accessories,Bags,Handbags,Blue,Fall,2016,Ethnic,W Women Blue Handbag
+10260,Women,Apparel,Topwear,Kurtis,Grey,Winter,2016,Casual,Levis Women Grey Kurti
+10261,Men,Footwear,Shoes,Casual Shoes,Red,Winter,2015,Ethnic,Nike Men Red Casual Shoes
+10262,Women,Apparel,Bottomwear,Trousers,Brown,Spring,2011,Ethnic,Fastrack Women Brown Trousers
+10263,Women,Footwear,Shoes,Casual Shoes,Navy Blue,Spring,2011,Casual,Puma Women Navy Blue Casual Shoes
+10264,Men,Accessories,Watches,Watches,Maroon,Winter,2015,Casual,Nike Men Maroon Watch
+10265,Men,Footwear,Shoes,Sports Shoes,Black,Summer,2015,Ethnic,W Men Black Sports Shoes
+10266,Men,Apparel,Topwear,Shirts,Maroon,Winter,2012,Formal,Fabindia Men Maroon Shirt
+10267,Women,Apparel,Topwear,Tops,Brown,Winter,2012,Sports,Nike Women Brown Top
+10268,Men,Footwear,Shoes,Casual Shoes,Pink,Summer,2015,Formal,Biba Men Pink Casual Shoes
+10269,Women,Accessories,Bags,Handbags,Brown,Winter,2011,Sports,Peter England Women Brown Handbag
+10270,Women,Apparel,Topwear,Shirts,White,Summer,2015,Sports,Baggit Women White Shirt
+10271,Men,Accessories,Bags,Backpacks,Green,Spring,2016,Casual,Biba Men Green Backpack
+10272,Women,Accessories,Socks,Socks,Brown,Winter,2016,Formal,Fastrack Women Brown Socks
+10273,Men,Footwear,Shoes,Casual Shoes,Brown,Summer,2012,Ethnic,Biba Men Brown Casual Shoes
+10274,Men,Accessories,Socks,Socks,Brown,Spring,2015,Sports,Peter England Men Brown Socks
+10275,Women,Apparel,Topwear,Kurtis,Blue,Spring,2011,Formal,Titan Women Blue Kurti
+10276,Men,Apparel,Topwear,Shirts,Blue,Summer,2011,Casual,Levis Men Blue Shirt
+10277,Unisex,Accessories,Bags,Backpacks,Blue,Spring,2016,Formal,Fabindia Unisex Blue Backpack
+10278,Women,Apparel,Topwear,Kurtas,Black,Spring,2012,Ethnic,W Women Black Kurta
+10279,Women,Accessories,Bags,Clutches,White,Fall,2015,Sports,Levis Women White Clutch
+10280,Men,Footwear,Shoes,Formal Shoes,Pink,Winter,2015,Sports,Baggit Men Pink Formal Shoes
+10281,Men,Apparel,Topwear,Shirts,Blue,Fall,2011,Ethnic,Titan Men Blue Shirt
+10282,Women,Apparel,Topwear,Shirts,Red,Spring,2016,Ethnic,Nike Women Red Shirt
+10283,Women,Apparel,Bottomwear,Trousers,Pink,Fall,2012,Sports,Puma Women Pink Trousers
+10284,Women,Footwear,Shoes,Sports Shoes,White,Winter,2015,Ethnic,Nike Women White Sports Shoes
+10285,Men,Apparel,Topwear,Tshirts,Navy Blue,Summer,2011,Sports,Wildcraft Men Navy Blue Tshirt
+10286,Men,Apparel,Bottomwear,Trousers,Pink,Summer,2016,Ethnic,Titan Men Pink Trousers
+10287,Men,Footwear,Shoes,Casual Shoes,White,Summer,2012,Sports,Roadster Men White Casual Shoes
+10288,Women,Apparel,Topwear,Tops,Maroon,Summer,2016,Formal,Levis Women Maroon Top
+10289,Men,Footwear,Shoes,Sports Shoes,Maroon,Summer,2012,Casual,Levis Men Maroon Sports Shoes
+10290,Men,Apparel,Bottomwear,Jeans,Brown,Winter,2011,Formal,Levis Men Brown Jeans
+10291,Men,Accessories,Socks,Socks,Black,Summer,2011,Ethnic,Titan Men Black Socks
+10292,Women,Apparel,Topwear,Tshirts,Navy Blue,Fall,2015,Formal,Puma Women Navy Blue Tshirt
+10293,Women,Footwear,Shoes,Sports Shoes,Grey,Fall,2011,Sports,Roadster Women Grey Sports Shoes
+10294,Women,Apparel,Topwear,Tops,Maroon,Summer,2016,Casual,Levis Women Maroon Top
+10295,Women,Apparel,Topwear,Tshirts,White,Spring,2016,Casual,Titan Women White Tshirt
+10296,Boys,Apparel,Topwear,Tshirts,Black,Spring,2012,Sports,Levis Boys Black Tshirt
+10297,Men,Footwear,Shoes,Sports Shoes,Grey,Summer,2011,Sports,Baggit Men Grey Sports Shoes
+10298,Unisex,Accessories,Watches,Watches,Green,Summer,2016,Casual,Biba Unisex Green Watch
+10299,Unisex,Accessories,Bags,Backpacks,Black,Summer,2011,Formal,Levis Unisex Black Backpack
+10300,Women,Apparel,Bottomwear,Trousers,White,Spring,2011,Ethnic,Biba Women White Trousers
+10301,Men,Apparel,Bottomwear,Trousers,Maroon,Spring,2012,Casual,W Men Maroon Trousers
+10302,Unisex,Accessories,Bags,Backpacks,Blue,Winter,2011,Ethnic,Peter England Unisex Blue Backpack
+10303,Unisex,Accessories,Watches,Watches,Pink,Spring,2016,Ethnic,Peter England Unisex Pink Watch
+10304,Unisex,Accessories,Eyewear,Sunglasses,Black,Summer,2011,Casual,Peter England Unisex Black Sunglasses
+10305,Women,Apparel,Topwear,Tshirts,Black,Summer,2016,Ethnic,Levis Women Black Tshirt
+10306,Men,Apparel,Topwear,Tshirts,Red,Winter,2016,Casual,Peter England Men Red Tshirt
+10307,Women,Footwear,Shoes,Casual Shoes,Blue,Spring,2016,Formal,Nike Women Blue Casual Shoes
+10308,Men,Footwear,Shoes,Formal Shoes,Navy Blue,Fall,2012,Sports,Fabindia Men Navy Blue Formal Shoes
+10309,Girls,Accessories,Watches,Watches,Brown,Spring,2015,Ethnic,Titan Girls Brown Watch
+10310,Women,Accessories,Bags,Handbags,Red,Summer,2015,Casual,Puma Women Red Handbag
+10311,Women,Apparel,Topwear,Shirts,Navy Blue,Fall,2016,Formal,Wildcraft Women Navy Blue Shirt
+10312,Unisex,Accessories,Eyewear,Sunglasses,Grey,Spring,2012,Sports,Titan Unisex Grey Sunglasses
+10313,Men,Accessories,Watches,Watches,Red,Summer,2015,Ethnic,Peter England Men Red Watch
+10314,Women,Accessories,Eyewear,Sunglasses,Red,Winter,2011,Ethnic,Titan Women Red Sunglasses
+10315,Boys,Footwear,Shoes,Casual Shoes,Navy Blue,Winter,2015,Sports,Wildcraft Boys Navy Blue Casual Shoes
+10316,Women,Accessories,Bags,Handbags,Blue,Summer,2016,Sports,Baggit Women Blue Handbag
+10317,Women,Apparel,Topwear,Tops,Green,Winter,2015,Casual,Peter England Women Green Top
+10318,Men,Footwear,Shoes,Sports Shoes,Grey,Winter,2015,Casual,Fastrack Men Grey Sports Shoes
+10319,Men,Apparel,Bottomwear,Trousers,Grey,Summer,2015,Casual,Fastrack Men Grey Trousers
+10320,Men,Footwear,Shoes,Formal Shoes,Green,Fall,2015,Sports,Titan Men Green Formal Shoes
+10321,Men,Accessories,Watches,Watches,Pink,Winter,2012,Formal,Wildcraft Men Pink Watch
+10322,Men,Accessories,Eyewear,Sunglasses,Green,Winter,2015,Ethnic,Fabindia Men Green Sunglasses
+10323,Unisex,Accessories,Watches,Watches,Maroon,Fall,2016,Formal,Wildcraft Unisex Maroon Watch
+10324,Women,Apparel,Topwear,Tshirts,Green,Spring,2015,Casual,Roadster Women Green Tshirt
+10325,Women,Apparel,Topwear,Kurtis,Blue,Spring,2011,Formal,Levis Women Blue Kurti
+10326,Men,Accessories,Eyewear,Sunglasses,Blue,Summer,2015,Ethnic,Wildcraft Men Blue Sunglasses
+10327,Women,Apparel,Topwear,Kurtis,Pink,Summer,2011,Casual,Wildcraft Women Pink Kurti
+10328,Men,Apparel,Bottomwear,Jeans,Green,Spring,2012,Ethnic,Wildcraft Men Green Jeans
+10329,Women,Apparel,Bottomwear,Trousers,Red,Summer,2016,Formal,Titan Women Red Trousers
+10330,Men,Footwear,Shoes,Sports Shoes,Red,Fall,2012,Formal,Roadster Men Red Sports Shoes
+10331,Men,Accessories,Socks,Socks,Grey,Summer,2011,Casual,Fabindia Men Grey Socks
+10332,Women,Footwear,Shoes,Sports Shoes,Pink,Spring,2016,Casual,Nike Women Pink Sports Shoes
+10333,Men,Apparel,Bottomwear,Jeans,Maroon,Spring,2011,Casual,Levis Men Maroon Jeans
+10334,Unisex,Footwear,Shoes,Casual Shoes,Red,Winter,2011,Sports,Nike Unisex Red Casual Shoes
+10335,Men,Accessories,Watches,Watches,Navy Blue,Winter,2015,Formal,Fastrack Men Navy Blue Watch
+10336,Men,Footwear,Shoes,Formal Shoes,Green,Summer,2015,Ethnic,Biba Men Green Formal Shoes
+10337,Women,Apparel,Topwear,Kurtas,Black,Summer,2011,Ethnic,Baggit Women Black Kurta
+10338,Women,Accessories,Bags,Handbags,Pink,Spring,2011,Casual,Peter England Women Pink Handbag
+10339,Men,Apparel,Innerwear,Briefs,Navy Blue,Summer,2012,Ethnic,Nike Men Navy Blue Briefs
+10340,Women,Accessories,Watches,Watches,Maroon,Spring,2011,Sports,Wildcraft Women Maroon Watch
+10341,Women,Apparel,Topwear,Tshirts,Blue,Fall,2016,Casual,Nike Women Blue Tshirt
+10342,Women,Accessories,Watches,Watches,Blue,Spring,2012,Sports,Fastrack Women Blue Watch
+10343,Women,Apparel,Topwear,Tshirts,Green,Summer,2016,Formal,Biba Women Green Tshirt
+10344,Men,Footwear,Shoes,Casual Shoes,Black,Winter,2011,Ethnic,Biba Men Black Casual Shoes
+10345,Women,Apparel,Topwear,Kurtas,Navy Blue,Summer,2016,Casual,Fastrack Women Navy Blue Kurta
+10346,Women,Accessories,Bags,Backpacks,White,Fall,2015,Formal,Fastrack Women White Backpack
+10347,Women,Accessories,Eyewear,Sunglasses,Brown,Fall,2012,Ethnic,Fabindia Women Brown Sunglasses
+10348,Unisex,Accessories,Watches,Watches,Green,Summer,2012,Sports,Peter England Unisex Green Watch
+10349,Unisex,Apparel,Topwear,Tshirts,Pink,Spring,2012,Ethnic,Biba Unisex Pink Tshirt
+10350,Men,Apparel,Topwear,Kurtas,Grey,Winter,2012,Casual,Titan Men Grey Kurta
+10351,Men,Accessories,Eyewear,Sunglasses,Red,Fall,2015,Formal,Wildcraft Men Red Sunglasses
+10352,Women,Accessories,Watches,Watches,Red,Summer,2015,Sports,Fastrack Women Red Watch
+10353,Men,Apparel,Bottomwear,Jeans,Brown,Winter,2011,Formal,Fabindia Men Brown Jeans
+10354,Unisex,Accessories,Watches,Watches,Pink,Fall,2011,Ethnic,Fastrack Unisex Pink Watch
+10355,Men,Apparel,Topwear,Shirts,Green,Spring,2015,Formal,Nike Men Green Shirt
+10356,Men,Accessories,Watches,Watches,Green,Spring,2015,Sports,Fabindia Men Green Watch
+10357,Men,Apparel,Topwear,Shirts,Navy Blue,Fall,2012,Casual,Roadster Men Navy Blue Shirt
+10358,Boys,Apparel,Topwear,Tshirts,Brown,Fall,2012,Sports,Baggit Boys Brown Tshirt
+10359,Women,Apparel,Topwear,Tops,Black,Fall,2012,Ethnic,Baggit Women Black Top
+10360,Men,Apparel,Topwear,Shirts,Grey,Spring,2012,Ethnic,Roadster Men Grey Shirt
+10361,Women,Accessories,Watches,Watches,Maroon,Winter,2012,Formal,Biba Women Maroon Watch
+10362,Men,Apparel,Topwear,Tshirts,Navy Blue,Summer,2011,Sports,W Men Navy Blue Tshirt
+10363,Women,Apparel,Topwear,Kurtas,Red,Winter,2012,Formal,Biba Women Red Kurta
+10364,Men,Apparel,Topwear,Tshirts,Maroon,Winter,2011,Casual,Puma Men Maroon Tshirt
+10365,Men,Footwear,Shoes,Casual Shoes,Pink,Summer,2015,Ethnic,Titan Men Pink Casual Shoes
+10366,Unisex,Accessories,Watches,Watches,Red,Spring,2011,Casual,Levis Unisex Red Watch
+10367,Unisex,Accessories,Watches,Watches,Grey,Winter,2015,Formal,Fastrack Unisex Grey Watch
+10368,Women,Apparel,Topwear,Tshirts,Navy Blue,Fall,2011,Formal,Wildcraft Women Navy Blue Tshirt
+10369,Girls,Apparel,Topwear,Tops,Blue,Summer,2015,Sports,Wildcraft Girls Blue Top
+10370,Men,Accessories,Bags,Backpacks,Pink,Summer,2015,Formal,Fabindia Men Pink Backpack
+10371,Men,Accessories,Bags,Backpacks,Blue,Spring,2011,Ethnic,Peter England Men Blue Backpack
+10372,Women,Apparel,Topwear,Kurtas,White,Spring,2016,Casual,Peter England Women White Kurta
+10373,Men,Apparel,Topwear,Shirts,Pink,Winter,2011,Formal,Baggit Men Pink Shirt
+10374,Women,Accessories,Watches,Watches,White,Winter,2012,Casual,W Women White Watch
+10375,Women,Apparel,Topwear,Tshirts,Red,Summer,2011,Casual,Puma Women Red Tshirt
+10376,Women,Footwear,Shoes,Casual Shoes,Green,Summer,2016,Formal,Puma Women Green Casual Shoes
+10377,Women,Accessories,Watches,Watches,Brown,Fall,2011,Formal,Fabindia Women Brown Watch
+10378,Women,Apparel,Topwear,Tshirts,Black,Summer,2016,Sports,Puma Women Black Tshirt
+10379,Women,Apparel,Topwear,Kurtis,Maroon,Fall,2011,Casual,Baggit Women Maroon Kurti
+10380,Women,Apparel,Topwear,Tshirts,White,Winter,2012,Formal,Titan Women White Tshirt
+10381,Women,Footwear,Shoes,Casual Shoes,Navy Blue,Spring,2016,Formal,Levis Women Navy Blue Casual Shoes
+10382,Men,Footwear,Shoes,Sports Shoes,Black,Spring,2016,Casual,Levis Men Black Sports Shoes
+10383,Women,Apparel,Topwear,Tshirts,Grey,Fall,2015,Sports,Roadster Women Grey Tshirt
+10384,Men,Apparel,Topwear,Tshirts,Green,Spring,2015,Sports,Nike Men Green Tshirt
+10385,Women,Apparel,Topwear,Kurtas,Pink,Fall,2012,Ethnic,Roadster Women Pink Kurta
+10386,Men,Accessories,Watches,Watches,Green,Summer,2015,Casual,Titan Men Green Watch
+10387,Men,Apparel,Topwear,Tshirts,Pink,Summer,2015,Sports,Biba Men Pink Tshirt
+10388,Unisex,Accessories,Watches,Watches,Green,Summer,2012,Formal,Baggit Unisex Green Watch
+10389,Men,Footwear,Shoes,Casual Shoes,Grey,Spring,2011,Casual,Titan Men Grey Casual Shoes
+10390,Women,Apparel,Topwear,Tshirts,Black,Fall,2015,Casual,Levis Women Black Tshirt
+10391,Men,Accessories,Watches,Watches,Maroon,Fall,2011,Casual,Fabindia Men Maroon Watch
+10392,Women,Apparel,Topwear,Tshirts,Grey,Summer,2015,Casual,W Women Grey Tshirt
+10393,Men,Apparel,Topwear,Tshirts,Red,Winter,2011,Casual,Nike Men Red Tshirt
+10394,Unisex,Accessories,Bags,Backpacks,Maroon,Fall,2011,Sports,Baggit Unisex Maroon Backpack
+10395,Men,Footwear,Shoes,Casual Shoes,Maroon,Winter,2016,Casual,Baggit Men Maroon Casual Shoes
+10396,Men,Apparel,Topwear,Shirts,Pink,Fall,2016,Ethnic,Biba Men Pink Shirt
+10397,Women,Apparel,Bottomwear,Jeans,Red,Summer,2015,Sports,W Women Red Jeans

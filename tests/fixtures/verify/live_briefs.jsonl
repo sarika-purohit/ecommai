@@ -1,0 +1,1 @@
+{"category": "Tshirts", "gender": "men", "must_haves": [{"id": "m1", "attribute": "neckline", "rule": "is", "value": "polo"}, {"id": "m2", "attribute": "pattern", "rule": "is", "value": "stripes"}, {"id": "m3", "attribute": "size_fit", "rule": "is", "value": "true to size"}], "language": "en"}

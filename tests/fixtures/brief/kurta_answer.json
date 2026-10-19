@@ -1,0 +1,25 @@
+{
+  "category": "Kurtas",
+  "gender": "women",
+  "must_haves": [
+    {"said": "cotton kurta", "detail": "fabric=cotton", "rule": "is"},
+    {"said": "pockets zaroor ho", "detail": "pockets=none", "rule": "is_not"},
+    {"said": "3/4 sleeves", "detail": "sleeve_length=three-quarter", "rule": "is"},
+    {"said": "see-through nahi", "detail": "sheerness=see-through", "rule": "is_not"},
+    {"said": "front pockets", "detail": "pockets=front", "rule": "is"},
+    {"said": "green", "detail": "dial_colour=green", "rule": "is"},
+    {"said": "navy", "detail": "colour=navy", "rule": "is"},
+    {"said": "cotton", "detail": "fabric=cotton", "rule": "is"}
+  ],
+  "nice_to_haves": [
+    {"said": "office ke liye", "detail": "usage=office", "rule": "is"},
+    {"said": "ethnic", "detail": "usage=ethnic", "rule": "is"}
+  ],
+  "not_checkable": ["brand Fabindia", " ", "brand Fabindia"],
+  "budget_max_inr": 1200,
+  "deadline": {"kind": "weekday", "days": 0, "weekday": "thursday", "next_week": false, "day": 0, "month": 0},
+  "size": "medium",
+  "language": "hinglish",
+  "question_about": "size",
+  "question": "Aap kaunsa size pehente ho?"
+}

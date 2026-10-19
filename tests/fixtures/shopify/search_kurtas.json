@@ -1,0 +1,693 @@
+{
+ "jsonrpc": "2.0",
+ "id": 1,
+ "result": {
+  "structuredContent": {
+   "ucp": {
+    "version": "2026-08-25",
+    "capabilities": {
+     "dev.ucp.shopping.catalog.search": [
+      {
+       "version": "2026-08-25",
+       "spec": "https://ucp.dev/2026-08-25/specification/shopping/catalog/",
+       "schema": "https://ucp.dev/2026-08-25/schemas/shopping/catalog_search.json"
+      }
+     ],
+     "dev.ucp.shopping.catalog.lookup": [
+      {
+       "version": "2026-08-25",
+       "spec": "https://ucp.dev/2026-08-25/specification/shopping/catalog/",
+       "schema": "https://ucp.dev/2026-08-25/schemas/shopping/catalog_lookup.json"
+      }
+     ],
+     "dev.shopify.catalog.global": [
+      {
+       "version": "2026-08-25",
+       "spec": "https://shopify.dev/docs/agents/catalog/global-catalog",
+       "schema": "https://shopify.dev/ucp/schemas/2026-08-25/shopify_catalog_global.json",
+       "extends": [
+        "dev.ucp.shopping.catalog.search",
+        "dev.ucp.shopping.catalog.lookup"
+       ],
+       "requires": {
+        "protocol": {
+         "min": "2026-08-25"
+        }
+       }
+      }
+     ]
+    },
+    "status": "success"
+   },
+   "products": [
+    {
+     "id": "gid://shopify/p/DmptlUPpvXkzRbz0yzmrv",
+     "title": "Women's Aline kurti- G230",
+     "description": {
+      "plain": "<p><span style=\"color: #0a0a0a;\">Buy Swapna Weddings Kurtis at Rs. 649 Product Code: G230 </span></p>\n<table border=\"1\"><tbody><tr><td>SIZES</td><td>CHEST</td></tr><tr><td>M</td><td>38</td></tr></tbody></table>"
+     },
+     "rating": {
+      "value": 4.8,
+      "scale_min": 1,
+      "scale_max": 5,
+      "count": 230
+     },
+     "media": [
+      {
+       "type": "image",
+       "url": "https://cdn.shopify.com/s/files/1/0672/8410/7316/files/G230_Black1.jpg",
+       "alt_text": "Women's Aline kurti- G230"
+      }
+     ],
+     "options": [
+      {
+       "name": "Color",
+       "values": [
+        {
+         "label": "Black"
+        },
+        {
+         "label": "Bottle Green"
+        },
+        {
+         "label": "Maroon"
+        },
+        {
+         "label": "Navy Blue"
+        },
+        {
+         "label": "Peacock Green"
+        },
+        {
+         "label": "Wine"
+        }
+       ]
+      },
+      {
+       "name": "Size",
+       "values": [
+        {
+         "label": "XS"
+        },
+        {
+         "label": "S"
+        },
+        {
+         "label": "M"
+        },
+        {
+         "label": "L"
+        },
+        {
+         "label": "XL"
+        },
+        {
+         "label": "2XL"
+        }
+       ]
+      }
+     ],
+     "metadata": {
+      "unique_selling_points": [
+       "Pre-order availability with a wide size range from XS to 3XL for inclusive fit."
+      ],
+      "top_features": [
+       "Soft cotton fabric ensures comfort during all-day wear",
+       "Solid black color offers versatile styling for various occasions",
+       "Short sleeves provide breathability and ease of movement",
+       "Available in sizes XS to 3XL for inclusive sizing",
+       "Pre-order option allows early access for special events"
+      ],
+      "tech_specs": [
+       "Material: 100% Cotton",
+       "Color: Black",
+       "Neckline: V-neck",
+       "Sleeve Length: Short",
+       "Pattern: Solid",
+       "Available Sizes: XS, S, M, L, XL, XXL, 3XL"
+      ]
+     },
+     "variants": [
+      {
+       "id": "gid://shopify/ProductVariant/46385104748596",
+       "title": "Women's Aline kurti- G230",
+       "description": {
+        "plain": "<p><span style=\"color: #0a0a0a;\">Buy Swapna Weddings Kurtis at Rs. 649 Product Code: G230 </span></p>\n<table border=\"1\"><tbody><tr><td>SIZES</td><td>CHEST</td></tr><tr><td>M</td><td>38</td></tr></tbody></table>"
+       },
+       "url": "https://www.swapnawedding.com/products/womens-kurti-g230?variant=46385104748596&_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "price": {
+        "amount": 64900,
+        "currency": "INR"
+       },
+       "list_price": {
+        "amount": 99900,
+        "currency": "INR"
+       },
+       "availability": {
+        "available": true
+       },
+       "options": [
+        {
+         "name": "Color",
+         "label": "Black"
+        },
+        {
+         "name": "Size",
+         "label": "L"
+        }
+       ],
+       "media": [
+        {
+         "type": "image",
+         "url": "https://cdn.shopify.com/s/files/1/0672/8410/7316/files/G230_Black1.jpg",
+         "alt_text": "Women's Aline kurti- G230"
+        }
+       ],
+       "seller": {
+        "id": "gid://shopify/Shop/67284107316",
+        "name": "Swapna Weddings",
+        "url": "https://www.swapnawedding.com",
+        "domain": "swapna-weddings.myshopify.com",
+        "links": [
+         {
+          "type": "privacy_policy",
+          "url": "https://checkout.shopify.com/67284107316/policies/30103306292.html"
+         }
+        ]
+       },
+       "checkout_url": "https://www.swapnawedding.com/cart/46385104748596:1?_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "rating": {
+        "value": 4.5,
+        "scale_min": 1,
+        "scale_max": 5,
+        "count": 262
+       },
+       "condition": [
+        "new"
+       ],
+       "eligible": {
+        "native_checkout": false
+       }
+      }
+     ],
+     "price_range": {
+      "min": {
+       "amount": 64900,
+       "currency": "INR"
+      },
+      "max": {
+       "amount": 64900,
+       "currency": "INR"
+      }
+     }
+    },
+    {
+     "id": "gid://shopify/p/3V4Xryr32ubFelobSCmrGa",
+     "title": "Olive Moss Cotton A-Line Kurti with Pockets | LS1101",
+     "description": {
+      "plain": "<p data-start=\"139\">Crafted from breathable <strong>cotton fabric</strong>, this kurti features <strong>3/4 sleeves</strong> and functional <strong>side pockets</strong>&nbsp;&amp; a soft lining.</p>\n<p><strong>SKU:</strong> LS1101</p>"
+     },
+     "media": [
+      {
+       "type": "image",
+       "url": "https://cdn.shopify.com/s/files/1/0843/4650/3471/files/13_3a80946e-a95f-41a5-b49f-b48729c360ec.webp",
+       "alt_text": "Olive Moss Cotton A-Line Kurti with Pockets | LS1101"
+      }
+     ],
+     "options": [
+      {
+       "name": "Size",
+       "values": [
+        {
+         "label": "2XL-42"
+        },
+        {
+         "label": "3XL-44"
+        },
+        {
+         "label": "L-38"
+        },
+        {
+         "label": "M-36"
+        },
+        {
+         "label": "S-34"
+        },
+        {
+         "label": "XL-40"
+        },
+        {
+         "label": "XS-32"
+        }
+       ]
+      }
+     ],
+     "variants": [
+      {
+       "id": "gid://shopify/ProductVariant/58252983173423",
+       "title": "Olive Moss Cotton A-Line Kurti with Pockets | LS1101",
+       "description": {
+        "plain": "<p data-start=\"139\">Crafted from breathable <strong>cotton fabric</strong>, this kurti features <strong>3/4 sleeves</strong> and functional <strong>side pockets</strong>&nbsp;&amp; a soft lining.</p>\n<p><strong>SKU:</strong> LS1101</p>"
+       },
+       "url": "https://liliumbyshrivha.com/products/olive-moss-cotton-a-line-kurti-with-pockets-ls1101?variant=58252983173423&_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "price": {
+        "amount": 129900,
+        "currency": "INR"
+       },
+       "availability": {
+        "available": true
+       },
+       "options": [
+        {
+         "name": "Size",
+         "label": "XS-32"
+        }
+       ],
+       "media": [
+        {
+         "type": "image",
+         "url": "https://cdn.shopify.com/s/files/1/0843/4650/3471/files/13_3a80946e-a95f-41a5-b49f-b48729c360ec.webp",
+         "alt_text": "Olive Moss Cotton A-Line Kurti with Pockets | LS1101"
+        }
+       ],
+       "seller": {
+        "id": "gid://shopify/Shop/84346503471",
+        "name": "LiliumByShrivha ",
+        "url": "https://liliumbyshrivha.com",
+        "domain": "befb53-3.myshopify.com",
+        "links": [
+         {
+          "type": "privacy_policy",
+          "url": "https://checkout.shopify.com/84346503471/policies/36794990895.html"
+         }
+        ]
+       },
+       "checkout_url": "https://liliumbyshrivha.com/cart/58252983173423:1?_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "condition": [
+        "new"
+       ],
+       "eligible": {
+        "native_checkout": false
+       }
+      }
+     ],
+     "price_range": {
+      "min": {
+       "amount": 129900,
+       "currency": "INR"
+      },
+      "max": {
+       "amount": 129900,
+       "currency": "INR"
+      }
+     }
+    },
+    {
+     "id": "gid://shopify/p/6YCYATAVKvMyCEP24NCeIF",
+     "title": "Janasya Women's Mustard Pure Cotton Floral Printed Straight Kurta",
+     "description": {
+      "plain": "<ul>\n<li>Crafted in breathable cotton fabric, this straight-fit kurta features floral block prints.</li>\n</ul>"
+     },
+     "media": [
+      {
+       "type": "image",
+       "url": "https://cdn.shopify.com/s/files/1/0607/1209/1818/files/JAC25KR01985.jpg",
+       "alt_text": "Janasya Women's Mustard Pure Cotton Floral Printed Straight Kurta"
+      }
+     ],
+     "options": [
+      {
+       "name": "Color",
+       "values": [
+        {
+         "label": "Mustard"
+        }
+       ]
+      },
+      {
+       "name": "Size",
+       "values": [
+        {
+         "label": "XS"
+        },
+        {
+         "label": "S"
+        },
+        {
+         "label": "M"
+        },
+        {
+         "label": "L"
+        },
+        {
+         "label": "XL"
+        },
+        {
+         "label": "2XL"
+        },
+        {
+         "label": "3XL"
+        }
+       ]
+      }
+     ],
+     "metadata": {
+      "unique_selling_points": [
+       "Combines traditional multicolor floral block prints with contemporary straight fit and balloon sleeves for a fresh ethnic look."
+      ],
+      "top_features": [
+       "Breathable cotton fabric ensures comfort in all seasons",
+       "Traditional multicolor floral block prints add artisanal charm",
+       "Straight fit with modern pintuck detailing and wooden button accents for a refined silhouette",
+       "Long balloon sleeves and functional side slits provide contemporary style and ease of movement",
+       "Low front slit and side slits enhance mobility and comfort"
+      ],
+      "tech_specs": [
+       "Material: 100% Cotton",
+       "Pattern: Floral",
+       "Color: Mustard (Yellow), Green, Brown, Blue",
+       "Neckline: V-neck with band collar",
+       "Sleeve Length: Long",
+       "Available Sizes: XS, S, M, L, XL, XXL, XXXL",
+       "Kurta Length: 46 inches"
+      ]
+     },
+     "variants": [
+      {
+       "id": "gid://shopify/ProductVariant/47683356721322",
+       "title": "Janasya Women's Mustard Pure Cotton Floral Printed Straight Kurta",
+       "description": {
+        "plain": "<ul>\n<li>Crafted in breathable cotton fabric, this straight-fit kurta features floral block prints.</li>\n</ul>"
+       },
+       "url": "https://janasya.com/products/janasya-womens-mustard-pure-cotton-floral-printed-straight-kurta-jac25kr01985?variant=47683356721322&_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "price": {
+        "amount": 79900,
+        "currency": "INR"
+       },
+       "list_price": {
+        "amount": 205900,
+        "currency": "INR"
+       },
+       "availability": {
+        "available": true
+       },
+       "options": [
+        {
+         "name": "Color",
+         "label": "Mustard"
+        },
+        {
+         "name": "Size",
+         "label": "XS"
+        }
+       ],
+       "media": [
+        {
+         "type": "image",
+         "url": "https://cdn.shopify.com/s/files/1/0607/1209/1818/files/JAC25KR01985.jpg",
+         "alt_text": "Janasya Women's Mustard Pure Cotton Floral Printed Straight Kurta"
+        }
+       ],
+       "seller": {
+        "id": "gid://shopify/Shop/60712091818",
+        "name": "Janasya.com",
+        "url": "https://janasya.com",
+        "domain": "janasya-india.myshopify.com",
+        "links": [
+         {
+          "type": "privacy_policy",
+          "url": "https://checkout.shopify.com/60712091818/policies/25358663850.html"
+         }
+        ]
+       },
+       "checkout_url": "https://janasya.com/cart/47683356721322:1?_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "condition": [
+        "new"
+       ],
+       "eligible": {
+        "native_checkout": false
+       }
+      }
+     ],
+     "price_range": {
+      "min": {
+       "amount": 79900,
+       "currency": "INR"
+      },
+      "max": {
+       "amount": 79900,
+       "currency": "INR"
+      }
+     }
+    },
+    {
+     "id": "gid://shopify/p/UsdPricedKurta1",
+     "title": "Imported kurta priced in dollars",
+     "description": {
+      "plain": "<ul>\n<li>Crafted in breathable cotton fabric, this straight-fit kurta features floral block prints.</li>\n</ul>"
+     },
+     "media": [
+      {
+       "type": "image",
+       "url": "https://cdn.shopify.com/s/files/1/0607/1209/1818/files/JAC25KR01985.jpg",
+       "alt_text": "Janasya Women's Mustard Pure Cotton Floral Printed Straight Kurta"
+      }
+     ],
+     "options": [
+      {
+       "name": "Color",
+       "values": [
+        {
+         "label": "Mustard"
+        }
+       ]
+      },
+      {
+       "name": "Size",
+       "values": [
+        {
+         "label": "XS"
+        },
+        {
+         "label": "S"
+        },
+        {
+         "label": "M"
+        },
+        {
+         "label": "L"
+        },
+        {
+         "label": "XL"
+        },
+        {
+         "label": "2XL"
+        },
+        {
+         "label": "3XL"
+        }
+       ]
+      }
+     ],
+     "metadata": {
+      "unique_selling_points": [
+       "Combines traditional multicolor floral block prints with contemporary straight fit and balloon sleeves for a fresh ethnic look."
+      ],
+      "top_features": [
+       "Breathable cotton fabric ensures comfort in all seasons",
+       "Traditional multicolor floral block prints add artisanal charm",
+       "Straight fit with modern pintuck detailing and wooden button accents for a refined silhouette",
+       "Long balloon sleeves and functional side slits provide contemporary style and ease of movement",
+       "Low front slit and side slits enhance mobility and comfort"
+      ],
+      "tech_specs": [
+       "Material: 100% Cotton",
+       "Pattern: Floral",
+       "Color: Mustard (Yellow), Green, Brown, Blue",
+       "Neckline: V-neck with band collar",
+       "Sleeve Length: Long",
+       "Available Sizes: XS, S, M, L, XL, XXL, XXXL",
+       "Kurta Length: 46 inches"
+      ]
+     },
+     "variants": [
+      {
+       "id": "gid://shopify/ProductVariant/47683356721322",
+       "title": "Janasya Women's Mustard Pure Cotton Floral Printed Straight Kurta",
+       "description": {
+        "plain": "<ul>\n<li>Crafted in breathable cotton fabric, this straight-fit kurta features floral block prints.</li>\n</ul>"
+       },
+       "url": "https://janasya.com/products/janasya-womens-mustard-pure-cotton-floral-printed-straight-kurta-jac25kr01985?variant=47683356721322&_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "price": {
+        "amount": 2500,
+        "currency": "USD"
+       },
+       "availability": {
+        "available": true
+       },
+       "options": [
+        {
+         "name": "Color",
+         "label": "Mustard"
+        },
+        {
+         "name": "Size",
+         "label": "XS"
+        }
+       ],
+       "media": [
+        {
+         "type": "image",
+         "url": "https://cdn.shopify.com/s/files/1/0607/1209/1818/files/JAC25KR01985.jpg",
+         "alt_text": "Janasya Women's Mustard Pure Cotton Floral Printed Straight Kurta"
+        }
+       ],
+       "seller": {
+        "id": "gid://shopify/Shop/60712091818",
+        "name": "Janasya.com",
+        "url": "https://janasya.com",
+        "domain": "janasya-india.myshopify.com",
+        "links": [
+         {
+          "type": "privacy_policy",
+          "url": "https://checkout.shopify.com/60712091818/policies/25358663850.html"
+         }
+        ]
+       },
+       "checkout_url": "https://janasya.com/cart/47683356721322:1?_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "condition": [
+        "new"
+       ],
+       "eligible": {
+        "native_checkout": false
+       }
+      }
+     ],
+     "price_range": {
+      "min": {
+       "amount": 2500,
+       "currency": "USD"
+      },
+      "max": {
+       "amount": 2500,
+       "currency": "USD"
+      }
+     }
+    },
+    {
+     "id": "gid://shopify/p/NoPhotoKurta22",
+     "title": "Kurta without a photo",
+     "description": {
+      "plain": "<p data-start=\"139\">Crafted from breathable <strong>cotton fabric</strong>, this kurti features <strong>3/4 sleeves</strong> and functional <strong>side pockets</strong>&nbsp;&amp; a soft lining.</p>\n<p><strong>SKU:</strong> LS1101</p>"
+     },
+     "media": [],
+     "options": [
+      {
+       "name": "Size",
+       "values": [
+        {
+         "label": "2XL-42"
+        },
+        {
+         "label": "3XL-44"
+        },
+        {
+         "label": "L-38"
+        },
+        {
+         "label": "M-36"
+        },
+        {
+         "label": "S-34"
+        },
+        {
+         "label": "XL-40"
+        },
+        {
+         "label": "XS-32"
+        }
+       ]
+      }
+     ],
+     "variants": [
+      {
+       "id": "gid://shopify/ProductVariant/58252983173423",
+       "title": "Olive Moss Cotton A-Line Kurti with Pockets | LS1101",
+       "description": {
+        "plain": "<p data-start=\"139\">Crafted from breathable <strong>cotton fabric</strong>, this kurti features <strong>3/4 sleeves</strong> and functional <strong>side pockets</strong>&nbsp;&amp; a soft lining.</p>\n<p><strong>SKU:</strong> LS1101</p>"
+       },
+       "url": "https://liliumbyshrivha.com/products/olive-moss-cotton-a-line-kurti-with-pockets-ls1101?variant=58252983173423&_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "price": {
+        "amount": 129900,
+        "currency": "INR"
+       },
+       "availability": {
+        "available": true
+       },
+       "options": [
+        {
+         "name": "Size",
+         "label": "XS-32"
+        }
+       ],
+       "media": [],
+       "seller": {
+        "id": "gid://shopify/Shop/84346503471",
+        "name": "LiliumByShrivha ",
+        "url": "https://liliumbyshrivha.com",
+        "domain": "befb53-3.myshopify.com",
+        "links": [
+         {
+          "type": "privacy_policy",
+          "url": "https://checkout.shopify.com/84346503471/policies/36794990895.html"
+         }
+        ]
+       },
+       "checkout_url": "https://liliumbyshrivha.com/cart/58252983173423:1?_gsid=YVyJ6Z1hFcza&utm_source=shopify&utm_medium=catalog",
+       "condition": [
+        "new"
+       ],
+       "eligible": {
+        "native_checkout": false
+       }
+      }
+     ],
+     "price_range": {
+      "min": {
+       "amount": 129900,
+       "currency": "INR"
+      },
+      "max": {
+       "amount": 129900,
+       "currency": "INR"
+      }
+     }
+    }
+   ],
+   "messages": [
+    {
+     "type": "info",
+     "code": "price_filter_applied",
+     "path": "$.filters.price",
+     "content": "Price filtering was applied on a USD basis; returned prices are contextualized to the buyer's market and may differ.",
+     "data": {
+      "request_currency": "INR",
+      "applied_usd": {
+       "min": 0.0,
+       "max": 15.74235
+      },
+      "conversion": {
+       "min": "fx_converted",
+       "max": "fx_converted"
+      }
+     }
+    }
+   ],
+   "pagination": {
+    "has_next_page": true,
+    "total_count": 473,
+    "cursor": "eyJvZmZzZXQiOjV9"
+   }
+  }
+ }
+}

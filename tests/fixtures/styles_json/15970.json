@@ -1,0 +1,178 @@
+{
+  "notification": {},
+  "meta": {
+    "code": 200,
+    "requestId": "246fba09-2d88-487c-9cba-9288acc9e121"
+  },
+  "data": {
+    "id": 15970,
+    "price": 1195,
+    "discountedPrice": 1195,
+    "styleType": "P",
+    "productTypeId": 320,
+    "articleNumber": "73223-00",
+    "visualTag": "",
+    "productDisplayName": "Turtle Check Men Navy Blue Shirt",
+    "variantName": "Check",
+    "myntraRating": 1,
+    "catalogAddDate": 1434434991,
+    "brandName": "Turtle",
+    "ageGroup": "Adults-Men",
+    "gender": "Men",
+    "baseColour": "Navy Blue",
+    "colour1": "White",
+    "colour2": "NA",
+    "fashionType": "Fashion",
+    "season": "Fall",
+    "year": "2011",
+    "usage": "Casual",
+    "vat": 5.5,
+    "displayCategories": "Casual Wear",
+    "weight": "0",
+    "navigationId": 6,
+    "landingPageUrl": "Shirts/Turtle/Turtle-Check-Men-Navy-Blue-Shirt/15970/buy",
+    "articleAttributes": {
+      "Fit": "Slim Fit",
+      "Pattern": "Checked",
+      "Body or Garment Size": "Garment Measurements in",
+      "Sleeve Length": "Long Sleeves",
+      "Fabric": "Cotton",
+      "Collar": "Spread Collar"
+    },
+    "crossLinks": [
+      {
+        "key": "More Shirts by Turtle",
+        "value": "shirts?f=brand:Turtle::gender:men"
+      }
+    ],
+    "brandUserProfile": {},
+    "codEnabled": true,
+    "styleImages": {
+      "default": {
+        "imageURL": "http://assets.myntassets.com/v1/images/style/properties/7a5b82d1372a7a5c6de67ae7a314fd91_images.jpg",
+        "imageType": "default"
+      },
+      "front": {
+        "imageURL": "http://assets.myntassets.com/v1/images/style/properties/98d4d8ff4f264ca568ba948a4524c92f_images.jpg",
+        "imageType": "front"
+      }
+    },
+    "lookGoodAlbum": {},
+    "style360Images": {},
+    "masterCategory": {
+      "id": 9,
+      "typeName": "Apparel",
+      "active": true,
+      "socialSharingEnabled": true,
+      "isReturnable": true,
+      "isExchangeable": true,
+      "pickupEnabled": true,
+      "isTryAndBuyEnabled": true
+    },
+    "subCategory": {
+      "id": 31,
+      "typeName": "Topwear",
+      "active": true,
+      "socialSharingEnabled": true,
+      "isReturnable": true,
+      "isExchangeable": true,
+      "pickupEnabled": true,
+      "isTryAndBuyEnabled": true
+    },
+    "articleType": {
+      "id": 85,
+      "typeName": "Shirts",
+      "active": true,
+      "socialSharingEnabled": true,
+      "isReturnable": true,
+      "isExchangeable": true,
+      "pickupEnabled": true,
+      "isTryAndBuyEnabled": true,
+      "isMyntsEnabled": true,
+      "serviceabilityDisclaimer": {
+        "title": "",
+        "desc": ""
+      }
+    },
+    "isEMIEnabled": true,
+    "otherFlags": [
+      {
+        "dataType": "BOOLEAN",
+        "name": "isFragile",
+        "value": "false"
+      },
+      {
+        "dataType": "BOOLEAN",
+        "name": "isTryAndBuyEnabled",
+        "value": "true"
+      },
+      {
+        "dataType": "BOOLEAN",
+        "name": "isHazmat",
+        "value": "false"
+      }
+    ],
+    "articleDisplayAttr": {
+      "id": 85,
+      "core": {
+        "order": "0",
+        "display": "2",
+        "pdtDetail": "1",
+        "pdtDeliveryOptions": "2",
+        "pdtSimilar": "2",
+        "pdtLike": "2"
+      },
+      "social": {
+        "order": "1",
+        "display": "2",
+        "userLikes": "1",
+        "styleNotes": "2",
+        "crossSell": "1"
+      },
+      "explore": {
+        "display": "2",
+        "crosslink": "1",
+        "similar": "1",
+        "order": "2"
+      }
+    },
+    "productDescriptors": {
+      "description": {
+        "descriptorType": "description",
+        "value": "<p style=\"text-align: justify;\"><strong>Composition</strong><br />Dark brown and indigo blue plaid check shirt with white accents, made of 100% cotton, has long sleeves with buttoned cuffs and a button on the elbow for rolling up the sleeve, denim spread collar, buttoned front placket, patch pocket on the upper left chest and a curved hemline<br /><br /><strong>Fitting</strong><br />Slim<br /><br /><strong>Wash care</strong><br />Machine wash cold at 30 degrees with like colours<br />Do not bleach <br />Wash and dry inside out<br />Hang to dry in shade<br />Medium iron<br /><br />The cleverly mitired pocket on the upper left chest and denim collar adds smooth styling to this dark brown and indigo blue plaid check shirt from turtle, while the cotton fabric keeps you feeling fresh and comfortable all day. Part of the proceeds from the sale of this product go towards the Save Turtle project in collaboration with WWF and Wildlife Society of Orissa, making it an environment friendly choice. Team this with chinos or jeans and sneakers.<br /><br /><em>Model statistics</em><br />Product is a size M on a model of height 6' and chest 39\"</p>"
+      }
+    },
+    "styleOptions": [
+      {
+        "id": 73829,
+        "name": "Size",
+        "value": "39",
+        "unifiedSize": "39",
+        "unifiedSizeValue": "39",
+        "unifiedSizeScale": "",
+        "allSize": "39",
+        "skuId": 87168,
+        "skuAvailabilityDetailMap": {},
+        "warehouseIdToItemCountMap": {},
+        "inventoryCount": 0,
+        "available": false,
+        "active": true
+      },
+      {
+        "id": 73827,
+        "name": "Size",
+        "value": "40",
+        "unifiedSize": "40",
+        "unifiedSizeValue": "40",
+        "unifiedSizeScale": "",
+        "allSize": "40",
+        "skuId": 87282,
+        "skuAvailabilityDetailMap": {},
+        "warehouseIdToItemCountMap": {},
+        "inventoryCount": 0,
+        "available": false,
+        "active": true
+      }
+    ]
+  }
+}
